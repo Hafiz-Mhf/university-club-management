@@ -1,0 +1,171 @@
+# Database Design
+
+**Engine:** PostgreSQL · **ORM:** Prisma · **Isolation:** app-layer multi-tenancy
+
+---
+
+## 1. Multi-Tenancy Model
+
+Every tenant-owned table carries an `organizationId` foreign key. The
+application enforces isolation at two layers:
+
+1. **TenantGuard** injects the caller's active `organizationId` (resolved from
+   their `Membership`) into request scope.
+2. A **Prisma middleware/extension** asserts every query against a
+   tenant-owned model includes the `organizationId` filter. Missing filter →
+   throw. Fails loud, never leaks.
+
+`User`, `ConsentRecord`, and `AuditLog` are the only models that are not
+strictly org-owned (User is global; AuditLog stores `organizationId` but is
+written by every module; ConsentRecord is user+purpose scoped).
+
+---
+
+## 2. Entities (Phase 1)
+
+### User (global identity)
+| Field | Type | Notes |
+|-------|------|-------|
+| id | uuid (PK) | |
+| email | string, unique | login |
+| passwordHash | string | argon2/bcrypt |
+| fullName | string | |
+| mfaSecret | string, nullable | Phase 3 SSO/MFA |
+| createdAt / updatedAt | timestamp | |
+| deletedAt | timestamp, nullable | soft delete / anonymize |
+
+### Organization (tenant)
+| Field | Type | Notes |
+|-------|------|-------|
+| id | uuid (PK) | |
+| name | string | |
+| slug | string, unique | public URL |
+| description | text | |
+| logoKey | string, nullable | private storage key |
+| advisors | jsonb | list |
+| socialLinks | jsonb | |
+| storageQuotaMb | int | default quota |
+| primaryColor | string | branding |
+| settings | jsonb | |
+| createdAt / updatedAt | timestamp | |
+
+### Membership (User ↔ Organization + RBAC)
+| Field | Type | Notes |
+|-------|------|-------|
+| id | uuid (PK) | |
+| userId | uuid (FK → User) | |
+| organizationId | uuid (FK → Organization) | |
+| role | enum Role | **per-org role — the RBAC source of truth** |
+| status | enum (active, alumni) | |
+| studentId, faculty, programme, intake, phone | string | member profile |
+| committeeHistory | jsonb | past roles + terms |
+| joinedAt | timestamp | |
+| — | unique(userId, organizationId) | one membership per org |
+
+### Event
+| Field | Type | Notes |
+|-------|------|-------|
+| id | uuid (PK) | |
+| organizationId | uuid (FK) | tenant scope |
+| title, description | string/text | |
+| bannerKey | string, nullable | private storage |
+| venue | string | |
+| capacity | int | |
+| startAt / endAt | timestamp | attendance window |
+| status | enum (draft, published, ongoing, completed, archived) | lifecycle |
+| createdBy | uuid (FK → User) | |
+| createdAt / updatedAt | timestamp | |
+
+### RegistrationForm / FormField
+`RegistrationForm` (1:1 Event) → many `FormField` (label, type, required,
+options jsonb, order). Lets committees replace Google Forms with custom fields.
+
+### Registration
+| Field | Type | Notes |
+|-------|------|-------|
+| id | uuid (PK) | |
+| eventId | uuid (FK) | |
+| organizationId | uuid (FK) | denormalized for scope |
+| userId | uuid (FK → User), nullable | nullable for non-account participants |
+| answers | jsonb | form responses |
+| status | enum (pending, approved, waitlisted, rejected, cancelled) | |
+| consentRecordId | uuid (FK → ConsentRecord) | consent snapshot |
+| createdAt | timestamp | |
+
+### Attendance
+| Field | Type | Notes |
+|-------|------|-------|
+| id | uuid (PK) | |
+| registrationId | uuid (FK, unique) | one per registration |
+| eventId | uuid (FK) | |
+| organizationId | uuid (FK) | |
+| qrTokenHash | string | HMAC-signed, single-use |
+| scannedAt | timestamp, nullable | |
+| status | enum (registered, present, absent) | |
+| scannedBy | uuid (FK → User), nullable | committee scanner |
+
+### Certificate
+| Field | Type | Notes |
+|-------|------|-------|
+| id | uuid (PK) | |
+| eventId | uuid (FK) | |
+| organizationId | uuid (FK) | |
+| userId | uuid (FK → User) | owner |
+| storageKey | string | **private** bucket key |
+| uploadedBy | uuid (FK → User) | committee |
+| createdAt | timestamp | |
+
+### ConsentRecord (PDPA)
+| Field | Type | Notes |
+|-------|------|-------|
+| id | uuid (PK) | |
+| userId | uuid (FK), nullable | |
+| purpose | string | e.g. event-registration |
+| policyVersion | string | for consent re-prompt |
+| grantedAt | timestamp | |
+| ipAddress | string, nullable | |
+
+### AuditLog
+| Field | Type | Notes |
+|-------|------|-------|
+| id | uuid (PK) | |
+| organizationId | uuid (FK), nullable | null for platform-level actions |
+| actorUserId | uuid (FK → User), nullable | |
+| action | string | e.g. certificate.download |
+| targetType / targetId | string | |
+| metadata | jsonb | |
+| ipAddress / userAgent | string, nullable | |
+| isBreakGlass | boolean | SuperAdmin cross-tenant flag |
+| createdAt | timestamp | |
+
+---
+
+## 3. Relationships (summary)
+
+```
+User 1─* Membership *─1 Organization
+Organization 1─* Event 1─1 RegistrationForm 1─* FormField
+Event 1─* Registration 1─1 Attendance
+Event 1─* Certificate *─1 User
+User 1─* ConsentRecord
+Organization 1─* AuditLog
+```
+
+---
+
+## 4. Indexing & Constraints
+
+- Index every `organizationId` (all tenant queries filter on it).
+- `unique(userId, organizationId)` on Membership.
+- `unique(registrationId)` on Attendance.
+- Index `Event(organizationId, status, startAt)` for dashboard queries.
+- Soft-delete via `deletedAt` on User for PDPA anonymization; hard-delete jobs
+  configurable per retention policy.
+
+---
+
+## 5. Phase 2+ Additions (not built yet)
+
+FileRepository, MeetingMinutes, Asset, PublicPageConfig, FeedbackResponse,
+Budget, Sponsor, Payment — each org-scoped, added when their phase lands.
+Keep this doc synced as models are implemented.
