@@ -53,6 +53,41 @@ Secretary / Treasurer / EventDirector > Committee > Volunteer > Participant
 `Advisor` = read-only oversight across the org. `SuperAdmin`/`UniversityAdmin`
 = platform admin (cross-tenant, break-glass logged).
 
+### As built — member management (shipped)
+
+Permission tiers are centralized in `backend/src/rbac/role-groups.ts`:
+
+- `MANAGE_ROLES` = President, VP — change committee roles, remove members,
+  assign President/VP on member add.
+- `MANAGE_MEMBERS` = MANAGE_ROLES + Secretary, Treasurer, Event Director —
+  add members, update profile/status.
+- `VIEW_MEMBERS` = MANAGE_MEMBERS + Committee — list members.
+
+Endpoints (`/organizations/:orgId/members`): `GET` (VIEW_MEMBERS), `GET /me`
+(any member), `POST` (MANAGE_MEMBERS), `PATCH /:id` profile/status
+(MANAGE_MEMBERS), `PATCH /:id/role` (MANAGE_ROLES), `DELETE /:id`
+(MANAGE_ROLES). Guard chain on every route: `JwtAuthGuard → TenantGuard →
+RolesGuard`; the actor's role is always read from `req.membershipRole` (set by
+`TenantGuard`), never from the client.
+
+Invariants enforced in `MembershipsService`:
+
+- **Escalation guard:** a MANAGE_MEMBERS-only actor cannot assign a
+  President/VP role when adding a member (403).
+- **Last-president guardrail:** an org must always keep ≥1 ACTIVE President.
+  Enforced on role change, status change (alumni), and removal — inside
+  **serializable transactions** so concurrent demotions cannot race past the
+  check (serialization conflicts map to 409).
+- Role changes append `{role, until}` to `committeeHistory`.
+- Audit actions: `member.add`, `member.status.change`, `member.role.change`,
+  `member.remove` — metadata is ids/enum values only, never personal data.
+
+Known accepted risk (policy decision pending): a VP can seize the presidency
+in two audited calls (promote self, then demote the original President), and
+any MANAGE_MEMBERS holder can mark a non-last President as alumni. Both match
+the Phase-1 matrix; revisit if committee politics demand President-only
+controls.
+
 ---
 
 ## 3. Multi-Tenant Isolation
@@ -60,7 +95,15 @@ Secretary / Treasurer / EventDirector > Committee > Volunteer > Participant
 - Every tenant-owned row carries `organizationId`.
 - Two enforcement layers: `TenantGuard` (request scope) + Prisma
   middleware/extension (query-level assertion — missing org filter throws).
+- The middleware covers filtering reads (`findMany`/`findFirst`/`count`) but
+  **not** `update`/`delete` — every mutation must therefore self-scope its
+  `where` with `organizationId` (Prisma 5 extended unique where); a cross-org
+  id surfaces as P2025 → 404. This is the established pattern in
+  `MembershipsService`.
 - **Mandatory automated tests:** org A must never read or write org B's data.
+  Shipped: `tenant-isolation` + `memberships-isolation` e2e suites cover
+  wrong-org access (403) and membership-id guessing through the attacker's own
+  org (404).
 - SuperAdmin cross-tenant access allowed but **always** written to `AuditLog`
   with `isBreakGlass = true` and flagged for review.
 
