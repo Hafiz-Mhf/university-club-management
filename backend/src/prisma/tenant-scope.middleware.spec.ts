@@ -34,4 +34,21 @@ describe('tenant-scope middleware', () => {
     const rows = await prisma.user.findMany({ take: 1 });
     expect(Array.isArray(rows)).toBe(true);
   });
+
+  it('throws when Event.findMany omits organizationId', async () => {
+    await expect(prisma.event.findMany({})).rejects.toThrow(/Tenant scope violation/);
+  });
+
+  it('throws when Event.findMany where lacks organizationId', async () => {
+    await expect(
+      prisma.event.findMany({ where: { status: 'DRAFT' } }),
+    ).rejects.toThrow(/Tenant scope violation/);
+  });
+
+  it('allows Event.findMany scoped by organizationId', async () => {
+    const rows = await prisma.event.findMany({
+      where: { organizationId: '00000000-0000-0000-0000-000000000000' },
+    });
+    expect(Array.isArray(rows)).toBe(true);
+  });
 });
