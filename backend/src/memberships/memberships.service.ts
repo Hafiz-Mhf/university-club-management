@@ -8,6 +8,7 @@ import { Prisma, Role, MemberStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { AddMemberDto } from './dto/add-member.dto';
+import { UpdateMemberDto } from './dto/update-member.dto';
 import { MANAGE_ROLES } from '../rbac/role-groups';
 
 const USER_SELECT = { id: true, fullName: true, email: true };
@@ -73,5 +74,40 @@ export class MembershipsService {
       metadata: { userId: user.id, role: dto.role },
     });
     return membership;
+  }
+
+  async updateMember(
+    organizationId: string,
+    membershipId: string,
+    dto: UpdateMemberDto,
+    actorUserId?: string,
+  ) {
+    // org-scoped existence check (findFirst is a scoped action — includes organizationId)
+    const current = await this.prisma.membership.findFirst({
+      where: { id: membershipId, organizationId },
+    });
+    if (!current) throw new NotFoundException('Membership not found in this organization');
+
+    const updated = await this.prisma.membership.update({
+      where: { id: membershipId },
+      data: {
+        status: dto.status,
+        studentId: dto.studentId,
+        faculty: dto.faculty,
+        programme: dto.programme,
+        intake: dto.intake,
+        phone: dto.phone,
+      },
+      include: { user: { select: USER_SELECT } },
+    });
+
+    if (dto.status && dto.status !== current.status) {
+      await this.audit.record({
+        organizationId, actorUserId, action: 'member.status.change',
+        targetType: 'Membership', targetId: membershipId,
+        metadata: { from: current.status, to: dto.status },
+      });
+    }
+    return updated;
   }
 }
