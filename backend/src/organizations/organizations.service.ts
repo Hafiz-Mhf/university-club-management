@@ -18,4 +18,8 @@ export class OrganizationsService {
       },
     });
   }
+
+  findOne(organizationId: string) {
+    return this.prisma.organization.findUnique({ where: { id: organizationId } });
+  }
 }
