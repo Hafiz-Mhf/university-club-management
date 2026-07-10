@@ -18,8 +18,10 @@ describe('AuditService.record', () => {
 
   it('writes an audit row', async () => {
     const action = `test.action.${Date.now()}`;
-    await audit.record({ action, actorUserId: null as any, metadata: { k: 'v' } });
-    const row = await prisma.auditLog.findFirst({ where: { action } });
+    const organizationId = '00000000-0000-0000-0000-000000000000';
+    await audit.record({ organizationId, action, actorUserId: null as any, metadata: { k: 'v' } });
+    // AuditLog is tenant-scoped, so filtering reads must include organizationId.
+    const row = await prisma.auditLog.findFirst({ where: { organizationId, action } });
     expect(row).toBeTruthy();
     expect(row!.metadata).toMatchObject({ k: 'v' });
     await prisma.auditLog.delete({ where: { id: row!.id } });

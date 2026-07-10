@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Patch, Post, UseGuards } from '@nestjs/common';
 import { OrganizationsService } from './organizations.service';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
+import { UpdateOrganizationSettingsDto } from './dto/update-organization-settings.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { TenantGuard } from '../tenancy/tenant.guard';
@@ -32,7 +33,7 @@ export class OrganizationsController {
   @Patch(':orgId/settings')
   updateSettings(
     @OrgId() orgId: string,
-    @Body() body: { primaryColor?: string },
+    @Body() body: UpdateOrganizationSettingsDto,
     @CurrentUser() user: { userId: string },
   ) {
     return this.orgs.updateSettings(orgId, body, user.userId);
