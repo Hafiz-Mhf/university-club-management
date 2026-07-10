@@ -1,8 +1,14 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Role, MemberStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { AddMemberDto } from './dto/add-member.dto';
+import { MANAGE_ROLES } from '../rbac/role-groups';
 
 const USER_SELECT = { id: true, fullName: true, email: true };
 
@@ -28,7 +34,17 @@ export class MembershipsService {
     });
   }
 
-  async add(organizationId: string, dto: AddMemberDto, actorUserId?: string) {
+  async add(
+    organizationId: string,
+    dto: AddMemberDto,
+    actorRole: Role,
+    actorUserId?: string,
+  ) {
+    // Assigning a president/VP role is committee-role management — only a
+    // MANAGE_ROLES holder may do it, even on member creation.
+    if (MANAGE_ROLES.includes(dto.role) && !MANAGE_ROLES.includes(actorRole)) {
+      throw new ForbiddenException('Only president/vice-president can assign that role');
+    }
     const user = await this.prisma.user.findUnique({ where: { email: dto.email } });
     if (!user) throw new NotFoundException('No account for that email');
     const existing = await this.prisma.membership.findUnique({

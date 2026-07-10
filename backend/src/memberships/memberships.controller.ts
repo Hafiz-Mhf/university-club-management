@@ -7,6 +7,7 @@ import { TenantGuard } from '../tenancy/tenant.guard';
 import { RolesGuard } from '../rbac/roles.guard';
 import { Roles } from '../rbac/roles.decorator';
 import { OrgId } from '../tenancy/org-id.decorator';
+import { MembershipRole } from '../tenancy/membership-role.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { VIEW_MEMBERS, MANAGE_MEMBERS } from '../rbac/role-groups';
 
@@ -37,8 +38,9 @@ export class MembershipsController {
   add(
     @OrgId() orgId: string,
     @Body() dto: AddMemberDto,
+    @MembershipRole() actorRole: Role,
     @CurrentUser() user: { userId: string },
   ) {
-    return this.members.add(orgId, dto, user.userId);
+    return this.members.add(orgId, dto, actorRole, user.userId);
   }
 }

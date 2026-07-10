@@ -52,4 +52,32 @@ describe('Add member (e2e)', () => {
       .send({ email: `ghost-${Date.now()}@test.io`, role: 'VOLUNTEER' })
       .expect(404);
   });
+
+  it('forbids a SECRETARY from assigning a PRESIDENT role (escalation guard)', async () => {
+    // President seeds a SECRETARY.
+    const secEmail = `sec-${Date.now()}@test.io`;
+    await register(secEmail);
+    await request(app.getHttpServer()).post(`/organizations/${orgId}/members`)
+      .set('Authorization', `Bearer ${presToken}`)
+      .send({ email: secEmail, role: 'SECRETARY' })
+      .expect(201);
+    const secToken = (await request(app.getHttpServer()).post('/auth/login')
+      .send({ email: secEmail, password: 'password123' })).body.accessToken;
+
+    // Secretary may add an ordinary member...
+    const volEmail = `vol-${Date.now()}@test.io`;
+    await register(volEmail);
+    await request(app.getHttpServer()).post(`/organizations/${orgId}/members`)
+      .set('Authorization', `Bearer ${secToken}`)
+      .send({ email: volEmail, role: 'VOLUNTEER' })
+      .expect(201);
+
+    // ...but must NOT mint a PRESIDENT.
+    const escEmail = `esc-${Date.now()}@test.io`;
+    await register(escEmail);
+    await request(app.getHttpServer()).post(`/organizations/${orgId}/members`)
+      .set('Authorization', `Bearer ${secToken}`)
+      .send({ email: escEmail, role: 'PRESIDENT' })
+      .expect(403);
+  });
 });
