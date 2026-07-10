@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { OrganizationsService } from './organizations.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from '../auth/auth.service';
+import { AuditService } from '../audit/audit.service';
 import { JwtModule } from '@nestjs/jwt';
 
 describe('OrganizationsService.create', () => {
@@ -15,7 +16,7 @@ describe('OrganizationsService.create', () => {
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       imports: [ConfigModule.forRoot({ isGlobal: true }), JwtModule.register({ secret: 'test' })],
-      providers: [OrganizationsService, AuthService, PrismaService],
+      providers: [OrganizationsService, AuthService, PrismaService, AuditService],
     }).compile();
     orgs = moduleRef.get(OrganizationsService);
     prisma = moduleRef.get(PrismaService);

@@ -30,7 +30,11 @@ export class OrganizationsController {
   @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
   @Roles('PRESIDENT')
   @Patch(':orgId/settings')
-  updateSettings(@OrgId() orgId: string, @Body() body: { primaryColor?: string }) {
-    return this.orgs.updateSettings(orgId, body);
+  updateSettings(
+    @OrgId() orgId: string,
+    @Body() body: { primaryColor?: string },
+    @CurrentUser() user: { userId: string },
+  ) {
+    return this.orgs.updateSettings(orgId, body, user.userId);
   }
 }
