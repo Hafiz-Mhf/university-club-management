@@ -22,4 +22,8 @@ export class OrganizationsService {
   findOne(organizationId: string) {
     return this.prisma.organization.findUnique({ where: { id: organizationId } });
   }
+
+  updateSettings(organizationId: string, data: { primaryColor?: string }) {
+    return this.prisma.organization.update({ where: { id: organizationId }, data });
+  }
 }
