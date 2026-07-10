@@ -4,6 +4,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { RefreshTokenRepository } from './refresh-token.repository';
 
 describe('AuthService.login', () => {
   let service: AuthService;
@@ -14,7 +15,7 @@ describe('AuthService.login', () => {
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       imports: [JwtModule.register({ secret: 'test' }), ConfigModule.forRoot({ isGlobal: true })],
-      providers: [AuthService, PrismaService],
+      providers: [AuthService, PrismaService, RefreshTokenRepository],
     }).compile();
     service = moduleRef.get(AuthService);
     prisma = moduleRef.get(PrismaService);
@@ -23,6 +24,7 @@ describe('AuthService.login', () => {
     userId = u.id;
   });
   afterAll(async () => {
+    await prisma.refreshToken.deleteMany({ where: { userId } });
     await prisma.user.delete({ where: { id: userId } });
     await prisma.$disconnect();
   });
