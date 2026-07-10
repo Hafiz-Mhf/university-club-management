@@ -10,6 +10,7 @@ describe('OrganizationsService.create', () => {
   let prisma: PrismaService;
   let auth: AuthService;
   let userId: string;
+  let orgId: string | undefined;
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
@@ -24,7 +25,9 @@ describe('OrganizationsService.create', () => {
     userId = u.id;
   });
   afterAll(async () => {
-    await prisma.membership.deleteMany({ where: { userId } });
+    if (orgId) {
+      await prisma.membership.deleteMany({ where: { userId, organizationId: orgId } });
+    }
     await prisma.organization.deleteMany({ where: { memberships: { some: { userId } } } });
     await prisma.user.delete({ where: { id: userId } });
     await prisma.$disconnect();
@@ -32,6 +35,7 @@ describe('OrganizationsService.create', () => {
 
   it('creates org and makes creator PRESIDENT', async () => {
     const org = await orgs.create(userId, { name: 'ACM', slug: `acm-${Date.now()}` });
+    orgId = org.id;
     const membership = await prisma.membership.findUnique({
       where: { userId_organizationId: { userId, organizationId: org.id } },
     });
