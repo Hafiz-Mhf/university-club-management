@@ -26,4 +26,13 @@ describe('envValidationSchema', () => {
     const { error } = envValidationSchema.validate({ ...valid, JWT_ACCESS_SECRET: 'short' });
     expect(error).toBeDefined();
   });
+
+  it('rejects identical access and refresh secrets', () => {
+    const { error } = envValidationSchema.validate({
+      ...valid,
+      JWT_ACCESS_SECRET: 'x'.repeat(20),
+      JWT_REFRESH_SECRET: 'x'.repeat(20),
+    });
+    expect(error).toBeDefined();
+  });
 });
