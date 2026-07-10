@@ -99,6 +99,14 @@ describe('Events CRUD (e2e)', () => {
     expect(res.body.venue).toBe('V');
   });
 
+  it('400 when title is explicitly null', async () => {
+    const created = await request(app.getHttpServer()).post(`/organizations/${orgId}/events`)
+      .set('Authorization', `Bearer ${presToken}`)
+      .send({ title: 'NullTitle', startAt: future(5), endAt: future(6) }).expect(201);
+    await request(app.getHttpServer()).patch(`/organizations/${orgId}/events/${created.body.id}`)
+      .set('Authorization', `Bearer ${presToken}`).send({ title: null }).expect(400);
+  });
+
   it('404 editing an event id not in this org', async () => {
     await request(app.getHttpServer()).patch(`/organizations/${orgId}/events/00000000-0000-0000-0000-000000000000`)
       .set('Authorization', `Bearer ${presToken}`).send({ venue: 'x' }).expect(404);
