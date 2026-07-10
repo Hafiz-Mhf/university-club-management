@@ -88,18 +88,27 @@ export class MembershipsService {
     });
     if (!current) throw new NotFoundException('Membership not found in this organization');
 
-    const updated = await this.prisma.membership.update({
-      where: { id: membershipId },
-      data: {
-        status: dto.status,
-        studentId: dto.studentId,
-        faculty: dto.faculty,
-        programme: dto.programme,
-        intake: dto.intake,
-        phone: dto.phone,
-      },
-      include: { user: { select: USER_SELECT } },
-    });
+    let updated;
+    try {
+      updated = await this.prisma.membership.update({
+        // self-scoping where: the row must still belong to this org at write time
+        where: { id: membershipId, organizationId },
+        data: {
+          status: dto.status,
+          studentId: dto.studentId,
+          faculty: dto.faculty,
+          programme: dto.programme,
+          intake: dto.intake,
+          phone: dto.phone,
+        },
+        include: { user: { select: USER_SELECT } },
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+        throw new NotFoundException('Membership not found in this organization');
+      }
+      throw error;
+    }
 
     if (dto.status && dto.status !== current.status) {
       await this.audit.record({

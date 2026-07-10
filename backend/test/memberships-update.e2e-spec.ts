@@ -43,4 +43,14 @@ describe('Update member (e2e)', () => {
     await request(app.getHttpServer()).patch(`/organizations/${orgId}/members/00000000-0000-0000-0000-000000000000`)
       .set('Authorization', `Bearer ${presToken}`).send({ programme: 'x' }).expect(404);
   });
+
+  it('ignores role/organizationId/userId in the body (mass-assignment guard)', async () => {
+    const res = await request(app.getHttpServer()).patch(`/organizations/${orgId}/members/${memberId}`)
+      .set('Authorization', `Bearer ${presToken}`)
+      .send({ role: 'PRESIDENT', organizationId: 'evil-org', userId: 'evil-user', faculty: 'FOE' })
+      .expect(200);
+    expect(res.body.role).toBe('COMMITTEE');
+    expect(res.body.organizationId).toBe(orgId);
+    expect(res.body.faculty).toBe('FOE');
+  });
 });
