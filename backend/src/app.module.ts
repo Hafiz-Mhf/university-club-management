@@ -5,6 +5,7 @@ import { AuthModule } from './auth/auth.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { AuditModule } from './audit/audit.module';
 import { MembershipsModule } from './memberships/memberships.module';
+import { EventsModule } from './events/events.module';
 import { envValidationSchema } from './config/env.validation';
 
 @Module({
@@ -15,6 +16,7 @@ import { envValidationSchema } from './config/env.validation';
     AuthModule,
     OrganizationsModule,
     MembershipsModule,
+    EventsModule,
   ],
 })
 export class AppModule {}
