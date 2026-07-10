@@ -69,4 +69,38 @@ describe('Events CRUD (e2e)', () => {
     await request(app.getHttpServer()).get(`/organizations/${orgId}/events/${draftId}`)
       .set('Authorization', `Bearer ${presToken}`).expect(200);
   });
+
+  it('edits a DRAFT event', async () => {
+    const created = await request(app.getHttpServer()).post(`/organizations/${orgId}/events`)
+      .set('Authorization', `Bearer ${presToken}`)
+      .send({ title: 'Editable', startAt: future(5), endAt: future(6) }).expect(201);
+    const res = await request(app.getHttpServer()).patch(`/organizations/${orgId}/events/${created.body.id}`)
+      .set('Authorization', `Bearer ${presToken}`).send({ venue: 'Room 12', title: 'Edited' }).expect(200);
+    expect(res.body.venue).toBe('Room 12');
+    expect(res.body.title).toBe('Edited');
+  });
+
+  it('400 when an edit would make endAt <= startAt', async () => {
+    const created = await request(app.getHttpServer()).post(`/organizations/${orgId}/events`)
+      .set('Authorization', `Bearer ${presToken}`)
+      .send({ title: 'DateEdit', startAt: future(5), endAt: future(6) }).expect(201);
+    await request(app.getHttpServer()).patch(`/organizations/${orgId}/events/${created.body.id}`)
+      .set('Authorization', `Bearer ${presToken}`).send({ endAt: future(4) }).expect(400);
+  });
+
+  it('ignores status/organizationId in the edit body (mass-assignment guard)', async () => {
+    const created = await request(app.getHttpServer()).post(`/organizations/${orgId}/events`)
+      .set('Authorization', `Bearer ${presToken}`)
+      .send({ title: 'MassAssign', startAt: future(5), endAt: future(6) }).expect(201);
+    const res = await request(app.getHttpServer()).patch(`/organizations/${orgId}/events/${created.body.id}`)
+      .set('Authorization', `Bearer ${presToken}`).send({ status: 'PUBLISHED', organizationId: 'evil', venue: 'V' }).expect(200);
+    expect(res.body.status).toBe('DRAFT');
+    expect(res.body.organizationId).toBe(orgId);
+    expect(res.body.venue).toBe('V');
+  });
+
+  it('404 editing an event id not in this org', async () => {
+    await request(app.getHttpServer()).patch(`/organizations/${orgId}/events/00000000-0000-0000-0000-000000000000`)
+      .set('Authorization', `Bearer ${presToken}`).send({ venue: 'x' }).expect(404);
+  });
 });

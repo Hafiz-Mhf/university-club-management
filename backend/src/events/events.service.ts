@@ -1,8 +1,9 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { Role } from '@prisma/client';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CreateEventDto } from './dto/create-event.dto';
+import { UpdateEventDto } from './dto/update-event.dto';
 import { MANAGE_EVENTS } from '../rbac/role-groups';
 
 @Injectable()
@@ -54,5 +55,36 @@ export class EventsService {
       throw new NotFoundException('Event not found in this organization');
     }
     return event;
+  }
+
+  async update(organizationId: string, eventId: string, dto: UpdateEventDto, actorUserId?: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const current = await tx.event.findFirst({ where: { id: eventId, organizationId } });
+      if (!current) throw new NotFoundException('Event not found in this organization');
+      if (current.status === 'COMPLETED' || current.status === 'CANCELLED') {
+        throw new ConflictException('Completed or cancelled events cannot be edited');
+      }
+
+      const startAt = dto.startAt ? new Date(dto.startAt) : current.startAt;
+      const endAt = dto.endAt ? new Date(dto.endAt) : current.endAt;
+      if (endAt <= startAt) throw new BadRequestException('endAt must be after startAt');
+
+      const data: Prisma.EventUpdateInput = {
+        title: dto.title,
+        description: dto.description,
+        venue: dto.venue,
+        capacity: dto.capacity,
+        startAt: dto.startAt ? startAt : undefined,
+        endAt: dto.endAt ? endAt : undefined,
+      };
+      const fields = Object.keys(data).filter((k) => (data as Record<string, unknown>)[k] !== undefined);
+
+      const updated = await tx.event.update({ where: { id: eventId, organizationId }, data });
+      await this.audit.record({
+        organizationId, actorUserId, action: 'event.update',
+        targetType: 'Event', targetId: eventId, metadata: { eventId, fields },
+      }, tx);
+      return updated;
+    });
   }
 }

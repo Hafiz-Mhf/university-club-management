@@ -1,7 +1,8 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { EventsService } from './events.service';
 import { CreateEventDto } from './dto/create-event.dto';
+import { UpdateEventDto } from './dto/update-event.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { TenantGuard } from '../tenancy/tenant.guard';
 import { RolesGuard } from '../rbac/roles.guard';
@@ -36,5 +37,17 @@ export class EventsController {
   @Get(':eventId')
   findOne(@OrgId() orgId: string, @Param('eventId') eventId: string, @MembershipRole() role: Role) {
     return this.events.findOne(orgId, eventId, role);
+  }
+
+  @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
+  @Roles(...MANAGE_EVENTS)
+  @Patch(':eventId')
+  update(
+    @OrgId() orgId: string,
+    @Param('eventId') eventId: string,
+    @Body() dto: UpdateEventDto,
+    @CurrentUser() user: { userId: string },
+  ) {
+    return this.events.update(orgId, eventId, dto, user.userId);
   }
 }
