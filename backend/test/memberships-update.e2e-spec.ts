@@ -44,6 +44,14 @@ describe('Update member (e2e)', () => {
       .set('Authorization', `Bearer ${presToken}`).send({ programme: 'x' }).expect(404);
   });
 
+  it('409 when marking the last active PRESIDENT as ALUMNI (guardrail)', async () => {
+    const presMembershipId = (await request(app.getHttpServer())
+      .get(`/organizations/${orgId}/members/me`)
+      .set('Authorization', `Bearer ${presToken}`)).body.id;
+    await request(app.getHttpServer()).patch(`/organizations/${orgId}/members/${presMembershipId}`)
+      .set('Authorization', `Bearer ${presToken}`).send({ status: 'ALUMNI' }).expect(409);
+  });
+
   it('ignores role/organizationId/userId in the body (mass-assignment guard)', async () => {
     const res = await request(app.getHttpServer()).patch(`/organizations/${orgId}/members/${memberId}`)
       .set('Authorization', `Bearer ${presToken}`)

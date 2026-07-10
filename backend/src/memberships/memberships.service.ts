@@ -82,42 +82,53 @@ export class MembershipsService {
     dto: UpdateMemberDto,
     actorUserId?: string,
   ) {
-    // org-scoped existence check (findFirst is a scoped action — includes organizationId)
-    const current = await this.prisma.membership.findFirst({
-      where: { id: membershipId, organizationId },
-    });
-    if (!current) throw new NotFoundException('Membership not found in this organization');
-
-    let updated;
     try {
-      updated = await this.prisma.membership.update({
-        // self-scoping where: the row must still belong to this org at write time
-        where: { id: membershipId, organizationId },
-        data: {
-          status: dto.status,
-          studentId: dto.studentId,
-          faculty: dto.faculty,
-          programme: dto.programme,
-          intake: dto.intake,
-          phone: dto.phone,
-        },
-        include: { user: { select: USER_SELECT } },
-      });
-    } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
-        throw new NotFoundException('Membership not found in this organization');
-      }
-      throw error;
-    }
+      // Serializable: the last-president check and the write must see one
+      // consistent snapshot, or two concurrent demotions could both pass.
+      return await this.prisma.$transaction(
+        async (tx) => {
+          const current = await tx.membership.findFirst({
+            where: { id: membershipId, organizationId },
+          });
+          if (!current) throw new NotFoundException('Membership not found in this organization');
 
-    if (dto.status && dto.status !== current.status) {
-      await this.audit.record({
-        organizationId, actorUserId, action: 'member.status.change',
-        targetType: 'Membership', targetId: membershipId,
-        metadata: { from: current.status, to: dto.status },
-      });
+          // Moving an ACTIVE president off ACTIVE removes them from the active
+          // set — same invariant changeRole protects, so enforce it here too.
+          if (
+            dto.status && dto.status !== 'ACTIVE' &&
+            current.role === 'PRESIDENT' && current.status === 'ACTIVE'
+          ) {
+            await this.assertNotLastActivePresident(tx, organizationId);
+          }
+
+          const updated = await tx.membership.update({
+            // self-scoping where: the row must still belong to this org at write time
+            where: { id: membershipId, organizationId },
+            data: {
+              status: dto.status,
+              studentId: dto.studentId,
+              faculty: dto.faculty,
+              programme: dto.programme,
+              intake: dto.intake,
+              phone: dto.phone,
+            },
+            include: { user: { select: USER_SELECT } },
+          });
+
+          if (dto.status && dto.status !== current.status) {
+            await this.audit.record({
+              organizationId, actorUserId, action: 'member.status.change',
+              targetType: 'Membership', targetId: membershipId,
+              metadata: { from: current.status, to: dto.status },
+            }, tx);
+          }
+          return updated;
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    } catch (error) {
+      this.rethrowMembershipWriteError(error);
     }
-    return updated;
   }
 
   async changeRole(
@@ -126,46 +137,68 @@ export class MembershipsService {
     newRole: Role,
     actorUserId?: string,
   ) {
-    // org-scoped existence check (findFirst is a scoped action — includes organizationId)
-    const current = await this.prisma.membership.findFirst({
-      where: { id: membershipId, organizationId },
-    });
-    if (!current) throw new NotFoundException('Membership not found in this organization');
-
-    if (current.role === 'PRESIDENT' && newRole !== 'PRESIDENT') {
-      const presidents = await this.prisma.membership.count({
-        where: { organizationId, role: 'PRESIDENT', status: 'ACTIVE' },
-      });
-      if (presidents <= 1) {
-        throw new ConflictException('Organization must have at least one president');
-      }
-    }
-
-    const history = Array.isArray(current.committeeHistory)
-      ? (current.committeeHistory as unknown[])
-      : [];
-    const nextHistory = [{ role: current.role, until: new Date().toISOString() }, ...history];
-
-    let updated;
     try {
-      updated = await this.prisma.membership.update({
-        // self-scoping where: the row must still belong to this org at write time
-        where: { id: membershipId, organizationId },
-        data: { role: newRole, committeeHistory: nextHistory as Prisma.InputJsonValue },
-        include: { user: { select: USER_SELECT } },
-      });
+      return await this.prisma.$transaction(
+        async (tx) => {
+          const current = await tx.membership.findFirst({
+            where: { id: membershipId, organizationId },
+          });
+          if (!current) throw new NotFoundException('Membership not found in this organization');
+          if (current.role === newRole) return current;
+
+          if (current.role === 'PRESIDENT' && current.status === 'ACTIVE') {
+            await this.assertNotLastActivePresident(tx, organizationId);
+          }
+
+          const history = Array.isArray(current.committeeHistory)
+            ? (current.committeeHistory as unknown[])
+            : [];
+          const nextHistory = [{ role: current.role, until: new Date().toISOString() }, ...history];
+
+          const updated = await tx.membership.update({
+            // self-scoping where: the row must still belong to this org at write time
+            where: { id: membershipId, organizationId },
+            data: { role: newRole, committeeHistory: nextHistory as Prisma.InputJsonValue },
+            include: { user: { select: USER_SELECT } },
+          });
+
+          await this.audit.record({
+            organizationId, actorUserId, action: 'member.role.change',
+            targetType: 'Membership', targetId: membershipId,
+            metadata: { from: current.role, to: newRole },
+          }, tx);
+          return updated;
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+      this.rethrowMembershipWriteError(error);
+    }
+  }
+
+  // Guardrail: an org must always keep >=1 ACTIVE PRESIDENT. Call inside a
+  // serializable transaction before any write that removes one from that set.
+  private async assertNotLastActivePresident(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+  ) {
+    const presidents = await tx.membership.count({
+      where: { organizationId, role: 'PRESIDENT', status: 'ACTIVE' },
+    });
+    if (presidents <= 1) {
+      throw new ConflictException('Organization must have at least one president');
+    }
+  }
+
+  private rethrowMembershipWriteError(error: unknown): never {
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === 'P2025') {
         throw new NotFoundException('Membership not found in this organization');
       }
-      throw error;
+      if (error.code === 'P2034') {
+        throw new ConflictException('Concurrent membership update — please retry');
+      }
     }
-
-    await this.audit.record({
-      organizationId, actorUserId, action: 'member.role.change',
-      targetType: 'Membership', targetId: membershipId,
-      metadata: { from: current.role, to: newRole },
-    });
-    return updated;
+    throw error;
   }
 }
