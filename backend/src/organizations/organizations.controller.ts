@@ -2,6 +2,7 @@ import { Body, Controller, Get, Patch, Post, UseGuards } from '@nestjs/common';
 import { OrganizationsService } from './organizations.service';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { UpdateOrganizationSettingsDto } from './dto/update-organization-settings.dto';
+import { UpdateOrganizationDto } from './dto/update-organization.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { TenantGuard } from '../tenancy/tenant.guard';
@@ -22,10 +23,27 @@ export class OrganizationsController {
     return this.orgs.create(user.userId, dto);
   }
 
+  @UseGuards(JwtAuthGuard)
+  @Get()
+  listMine(@CurrentUser() user: { userId: string }) {
+    return this.orgs.listForUser(user.userId);
+  }
+
   @UseGuards(JwtAuthGuard, TenantGuard)
   @Get(':orgId')
   findOne(@OrgId() orgId: string) {
     return this.orgs.findOne(orgId);
+  }
+
+  @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
+  @Roles('PRESIDENT', 'VICE_PRESIDENT')
+  @Patch(':orgId')
+  updateProfile(
+    @OrgId() orgId: string,
+    @Body() dto: UpdateOrganizationDto,
+    @CurrentUser() user: { userId: string },
+  ) {
+    return this.orgs.updateProfile(orgId, dto, user.userId);
   }
 
   @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
