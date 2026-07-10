@@ -2,6 +2,7 @@ import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/co
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as argon2 from 'argon2';
+import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -43,16 +44,38 @@ export class AuthService {
       secret: this.config.get('JWT_ACCESS_SECRET'),
       expiresIn: accessTtl,
     });
-    const refreshToken = await this.jwt.signAsync(payload, {
-      secret: this.config.get('JWT_REFRESH_SECRET'),
-      expiresIn: refreshTtl,
-    });
+    // jti ensures uniqueness even if two tokens are signed for the same
+    // user within the same second (iat has only second-level resolution).
+    const refreshToken = await this.jwt.signAsync(
+      { ...payload, jti: randomUUID() },
+      { secret: this.config.get('JWT_REFRESH_SECRET'), expiresIn: refreshTtl },
+    );
     await this.refreshTokens.create(
       user.id,
       sha256(refreshToken),
       this.refreshExpiryDate(refreshTtl),
     );
     return { accessToken, refreshToken };
+  }
+
+  async refresh(refreshToken: string): Promise<{ accessToken: string; refreshToken: string }> {
+    let payload: { sub: string; email: string };
+    try {
+      payload = await this.jwt.verifyAsync(refreshToken, {
+        secret: this.config.get('JWT_REFRESH_SECRET'),
+      });
+    } catch {
+      throw new UnauthorizedException('Invalid refresh token');
+    }
+    const active = await this.refreshTokens.findActiveByHash(sha256(refreshToken));
+    if (!active) throw new UnauthorizedException('Invalid refresh token');
+    await this.refreshTokens.revoke(active.id); // rotate: kill the old one
+    return this.issueTokens({ id: payload.sub, email: payload.email });
+  }
+
+  async logout(refreshToken: string): Promise<void> {
+    const active = await this.refreshTokens.findActiveByHash(sha256(refreshToken));
+    if (active) await this.refreshTokens.revoke(active.id);
   }
 
   // Converts a TTL like '7d' / '900s' / '30m' / '12h' to an absolute Date.
