@@ -1,0 +1,89 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  PRESIDENT
+  VICE_PRESIDENT
+  SECRETARY
+  TREASURER
+  EVENT_DIRECTOR
+  COMMITTEE
+  VOLUNTEER
+  PARTICIPANT
+  ADVISOR
+}
+
+enum MemberStatus {
+  ACTIVE
+  ALUMNI
+}
+
+model User {
+  id           String       @id @default(uuid())
+  email        String       @unique
+  passwordHash String
+  fullName     String
+  mfaSecret    String?
+  memberships  Membership[]
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  deletedAt    DateTime?
+}
+
+model Organization {
+  id             String       @id @default(uuid())
+  name           String
+  slug           String       @unique
+  description    String?
+  logoKey        String?
+  advisors       Json?
+  socialLinks    Json?
+  storageQuotaMb Int          @default(1024)
+  primaryColor   String       @default("#2563eb")
+  settings       Json?
+  memberships    Membership[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+model Membership {
+  id               String       @id @default(uuid())
+  userId           String
+  organizationId   String
+  role             Role
+  status           MemberStatus @default(ACTIVE)
+  studentId        String?
+  faculty          String?
+  programme        String?
+  intake           String?
+  phone            String?
+  committeeHistory Json?
+  user             User         @relation(fields: [userId], references: [id])
+  organization     Organization @relation(fields: [organizationId], references: [id])
+  joinedAt         DateTime     @default(now())
+
+  @@unique([userId, organizationId])
+  @@index([organizationId])
+}
+
+model AuditLog {
+  id             String   @id @default(uuid())
+  organizationId String?
+  actorUserId    String?
+  action         String
+  targetType     String?
+  targetId       String?
+  metadata       Json?
+  ipAddress      String?
+  userAgent      String?
+  isBreakGlass   Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId])
+}
