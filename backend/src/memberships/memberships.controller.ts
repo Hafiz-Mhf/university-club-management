@@ -3,6 +3,7 @@ import { Role, MemberStatus } from '@prisma/client';
 import { MembershipsService } from './memberships.service';
 import { AddMemberDto } from './dto/add-member.dto';
 import { UpdateMemberDto } from './dto/update-member.dto';
+import { ChangeRoleDto } from './dto/change-role.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { TenantGuard } from '../tenancy/tenant.guard';
 import { RolesGuard } from '../rbac/roles.guard';
@@ -10,7 +11,7 @@ import { Roles } from '../rbac/roles.decorator';
 import { OrgId } from '../tenancy/org-id.decorator';
 import { MembershipRole } from '../tenancy/membership-role.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
-import { VIEW_MEMBERS, MANAGE_MEMBERS } from '../rbac/role-groups';
+import { VIEW_MEMBERS, MANAGE_MEMBERS, MANAGE_ROLES } from '../rbac/role-groups';
 
 @Controller('organizations/:orgId/members')
 export class MembershipsController {
@@ -55,5 +56,17 @@ export class MembershipsController {
     @CurrentUser() user: { userId: string },
   ) {
     return this.members.updateMember(orgId, membershipId, dto, user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
+  @Roles(...MANAGE_ROLES)
+  @Patch(':membershipId/role')
+  changeRole(
+    @OrgId() orgId: string,
+    @Param('membershipId') membershipId: string,
+    @Body() dto: ChangeRoleDto,
+    @CurrentUser() user: { userId: string },
+  ) {
+    return this.members.changeRole(orgId, membershipId, dto.role, user.userId);
   }
 }

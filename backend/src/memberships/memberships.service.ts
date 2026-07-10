@@ -119,4 +119,53 @@ export class MembershipsService {
     }
     return updated;
   }
+
+  async changeRole(
+    organizationId: string,
+    membershipId: string,
+    newRole: Role,
+    actorUserId?: string,
+  ) {
+    // org-scoped existence check (findFirst is a scoped action — includes organizationId)
+    const current = await this.prisma.membership.findFirst({
+      where: { id: membershipId, organizationId },
+    });
+    if (!current) throw new NotFoundException('Membership not found in this organization');
+
+    if (current.role === 'PRESIDENT' && newRole !== 'PRESIDENT') {
+      const presidents = await this.prisma.membership.count({
+        where: { organizationId, role: 'PRESIDENT', status: 'ACTIVE' },
+      });
+      if (presidents <= 1) {
+        throw new ConflictException('Organization must have at least one president');
+      }
+    }
+
+    const history = Array.isArray(current.committeeHistory)
+      ? (current.committeeHistory as unknown[])
+      : [];
+    const nextHistory = [{ role: current.role, until: new Date().toISOString() }, ...history];
+
+    let updated;
+    try {
+      updated = await this.prisma.membership.update({
+        // self-scoping where: the row must still belong to this org at write time
+        where: { id: membershipId, organizationId },
+        data: { role: newRole, committeeHistory: nextHistory as Prisma.InputJsonValue },
+        include: { user: { select: USER_SELECT } },
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+        throw new NotFoundException('Membership not found in this organization');
+      }
+      throw error;
+    }
+
+    await this.audit.record({
+      organizationId, actorUserId, action: 'member.role.change',
+      targetType: 'Membership', targetId: membershipId,
+      metadata: { from: current.role, to: newRole },
+    });
+    return updated;
+  }
 }
