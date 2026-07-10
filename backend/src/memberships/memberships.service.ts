@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Role, MemberStatus } from '@prisma/client';
+import { Prisma, Role, MemberStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { AddMemberDto } from './dto/add-member.dto';
@@ -47,22 +47,26 @@ export class MembershipsService {
     }
     const user = await this.prisma.user.findUnique({ where: { email: dto.email } });
     if (!user) throw new NotFoundException('No account for that email');
-    const existing = await this.prisma.membership.findUnique({
-      where: { userId_organizationId: { userId: user.id, organizationId } },
-    });
-    if (existing) throw new ConflictException('User is already a member');
-    const membership = await this.prisma.membership.create({
-      data: {
-        organizationId,
-        userId: user.id,
-        role: dto.role,
-        studentId: dto.studentId,
-        faculty: dto.faculty,
-        programme: dto.programme,
-        intake: dto.intake,
-        phone: dto.phone,
-      },
-    });
+    let membership;
+    try {
+      membership = await this.prisma.membership.create({
+        data: {
+          organizationId,
+          userId: user.id,
+          role: dto.role,
+          studentId: dto.studentId,
+          faculty: dto.faculty,
+          programme: dto.programme,
+          intake: dto.intake,
+          phone: dto.phone,
+        },
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new ConflictException('User is already a member');
+      }
+      throw error;
+    }
     await this.audit.record({
       organizationId, actorUserId, action: 'member.add',
       targetType: 'Membership', targetId: membership.id,
