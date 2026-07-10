@@ -1,7 +1,9 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CreateEventDto } from './dto/create-event.dto';
+import { MANAGE_EVENTS } from '../rbac/role-groups';
 
 @Injectable()
 export class EventsService {
@@ -35,5 +37,22 @@ export class EventsService {
       }, tx);
       return event;
     });
+  }
+
+  list(organizationId: string, actorRole: Role) {
+    const canManage = MANAGE_EVENTS.includes(actorRole);
+    return this.prisma.event.findMany({
+      where: { organizationId, ...(canManage ? {} : { status: { not: 'DRAFT' } }) },
+      orderBy: { startAt: 'desc' },
+    });
+  }
+
+  async findOne(organizationId: string, eventId: string, actorRole: Role) {
+    const event = await this.prisma.event.findFirst({ where: { id: eventId, organizationId } });
+    if (!event) throw new NotFoundException('Event not found in this organization');
+    if (event.status === 'DRAFT' && !MANAGE_EVENTS.includes(actorRole)) {
+      throw new NotFoundException('Event not found in this organization');
+    }
+    return event;
   }
 }
