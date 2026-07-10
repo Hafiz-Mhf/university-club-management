@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { Role, MemberStatus } from '@prisma/client';
 import { MembershipsService } from './memberships.service';
 import { AddMemberDto } from './dto/add-member.dto';
@@ -68,5 +68,16 @@ export class MembershipsController {
     @CurrentUser() user: { userId: string },
   ) {
     return this.members.changeRole(orgId, membershipId, dto.role, user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
+  @Roles(...MANAGE_ROLES)
+  @Delete(':membershipId')
+  remove(
+    @OrgId() orgId: string,
+    @Param('membershipId') membershipId: string,
+    @CurrentUser() user: { userId: string },
+  ) {
+    return this.members.remove(orgId, membershipId, user.userId);
   }
 }

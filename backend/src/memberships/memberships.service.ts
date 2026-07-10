@@ -176,6 +176,40 @@ export class MembershipsService {
     }
   }
 
+  async remove(
+    organizationId: string,
+    membershipId: string,
+    actorUserId?: string,
+  ): Promise<{ removed: true }> {
+    try {
+      return await this.prisma.$transaction(
+        async (tx) => {
+          const current = await tx.membership.findFirst({
+            where: { id: membershipId, organizationId },
+          });
+          if (!current) throw new NotFoundException('Membership not found in this organization');
+
+          if (current.role === 'PRESIDENT' && current.status === 'ACTIVE') {
+            await this.assertNotLastActivePresident(tx, organizationId);
+          }
+
+          // self-scoping where: the row must still belong to this org at delete time
+          await tx.membership.delete({ where: { id: membershipId, organizationId } });
+
+          await this.audit.record({
+            organizationId, actorUserId, action: 'member.remove',
+            targetType: 'Membership', targetId: membershipId,
+            metadata: { userId: current.userId, role: current.role },
+          }, tx);
+          return { removed: true as const };
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    } catch (error) {
+      this.rethrowMembershipWriteError(error);
+    }
+  }
+
   // Guardrail: an org must always keep >=1 ACTIVE PRESIDENT. Call inside a
   // serializable transaction before any write that removes one from that set.
   private async assertNotLastActivePresident(
