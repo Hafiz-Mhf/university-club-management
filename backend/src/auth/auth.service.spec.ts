@@ -1,5 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { ConflictException } from '@nestjs/common';
+import { JwtModule } from '@nestjs/jwt';
+import { ConfigModule } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -9,6 +11,7 @@ describe('AuthService.register', () => {
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
+      imports: [JwtModule.register({ secret: 'test' }), ConfigModule.forRoot({ isGlobal: true })],
       providers: [AuthService, PrismaService],
     }).compile();
     service = moduleRef.get(AuthService);
