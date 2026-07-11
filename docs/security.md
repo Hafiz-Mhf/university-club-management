@@ -42,6 +42,7 @@ Secretary / Treasurer / EventDirector > Committee > Volunteer > Participant
 | Manage committee & roles | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Manage members | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
 | Create/edit events | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ |
+| View events (published) | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Approve registrations | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ |
 | Scan QR / mark attendance | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
 | Upload certificates | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ |
@@ -87,6 +88,56 @@ in two audited calls (promote self, then demote the original President), and
 any MANAGE_MEMBERS holder can mark a non-last President as alumni. Both match
 the Phase-1 matrix; revisit if committee politics demand President-only
 controls.
+
+### As built — event management (shipped)
+
+Permission tiers (same `backend/src/rbac/role-groups.ts`):
+
+- `MANAGE_EVENTS` = MANAGE_MEMBERS + Committee (President, VP, Secretary,
+  Treasurer, Event Director, Committee) — create/edit events and drive
+  DRAFT→PUBLISHED→COMPLETED transitions.
+- `MANAGE_MEMBERS` (reused, destructive tier) — cancel and delete events; one
+  step above MANAGE_EVENTS since these are harder to undo.
+
+Endpoints (`/organizations/:orgId/events`):
+
+| Route | Tier | Notes |
+|---|---|---|
+| `POST /` | MANAGE_EVENTS | creates in `DRAFT` |
+| `GET /` | any member (TenantGuard only) | DRAFT hidden from non-managers |
+| `GET /:eventId` | any member (TenantGuard only) | DRAFT read by a non-manager → 404, not 403 |
+| `PATCH /:eventId` | MANAGE_EVENTS | 409 if event is COMPLETED/CANCELLED — terminal states immutable |
+| `POST /:eventId/publish` | MANAGE_EVENTS | DRAFT→PUBLISHED; 409 if `endAt` already past |
+| `POST /:eventId/complete` | MANAGE_EVENTS | PUBLISHED→COMPLETED |
+| `POST /:eventId/cancel` | MANAGE_MEMBERS | DRAFT\|PUBLISHED→CANCELLED |
+| `DELETE /:eventId` | MANAGE_MEMBERS | any status |
+
+Guard chain: `JwtAuthGuard → TenantGuard → RolesGuard` on the gated routes;
+`list`/`get` drop `RolesGuard` — visibility is filtered inside the service by
+the caller's `req.membershipRole`, not gated by a role decorator. All
+mutations self-scope `where: { id, organizationId }` (the tenant-scope
+middleware covers `Event` for filtering reads, not `update`/`delete` — see
+§3).
+
+Invariants enforced in `EventsService`:
+
+- **Create/edit vs destructive split:** create, edit, and the forward
+  transitions (publish, complete) sit at MANAGE_EVENTS; cancel and delete —
+  the two operations that void or destroy an event — require MANAGE_MEMBERS.
+- **Terminal-state immutability:** COMPLETED and CANCELLED events reject
+  `PATCH` with 409.
+- **DRAFT-hidden-404:** DRAFT events are invisible to non-managers in both
+  `list` (filtered out of the result set) and `get` (404, never 403 — avoids
+  confirming a DRAFT event's existence to someone who isn't allowed to see
+  it).
+- **Compare-and-swap transitions:** `publish`/`complete`/`cancel` update
+  `where: { id, organizationId, status: <validated-status> }` inside a
+  transaction; a concurrent conflicting transition loses with Prisma P2025 →
+  mapped to 409, and never writes an audit row for the loser.
+- Audit actions: `event.create` `{eventId, title}`, `event.update`
+  `{eventId, fields}`, `event.publish` / `event.complete` / `event.cancel`
+  `{eventId, from, to}`, `event.delete` `{eventId, title}` — metadata is
+  ids/enum values/title only, never personal data.
 
 ---
 

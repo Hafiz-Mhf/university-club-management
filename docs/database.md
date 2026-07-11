@@ -62,19 +62,22 @@ written by every module; ConsentRecord is user+purpose scoped).
 | joinedAt | timestamp | |
 | — | unique(userId, organizationId) | one membership per org |
 
-### Event
+### Event (shipped)
 | Field | Type | Notes |
 |-------|------|-------|
 | id | uuid (PK) | |
-| organizationId | uuid (FK) | tenant scope |
-| title, description | string/text | |
-| bannerKey | string, nullable | private storage |
-| venue | string | |
-| capacity | int | |
-| startAt / endAt | timestamp | attendance window |
-| status | enum (draft, published, ongoing, completed, archived) | lifecycle |
-| createdBy | uuid (FK → User) | |
+| organizationId | uuid (FK → Organization) | tenant scope |
+| title | string | required |
+| description | text, nullable | |
+| venue | string, nullable | |
+| startAt / endAt | timestamp | attendance window; `endAt` must be after `startAt` |
+| capacity | int, nullable | `null` = unlimited; capacity enforcement deferred to the Registration module |
+| bannerKey | string, nullable | private storage key; upload flow deferred to the storage module |
+| status | enum `EventStatus` (DRAFT, PUBLISHED, COMPLETED, CANCELLED) | lifecycle, default `DRAFT` |
+| createdByUserId | uuid (FK → User), nullable | |
 | createdAt / updatedAt | timestamp | |
+| — | `@@index([organizationId])` | tenant-scoped queries |
+| — | `@@index([organizationId, status])` | list/status filtering (e.g. hiding DRAFT from non-managers) |
 
 ### RegistrationForm / FormField
 `RegistrationForm` (1:1 Event) → many `FormField` (label, type, required,
@@ -158,7 +161,8 @@ Organization 1─* AuditLog
 - Index every `organizationId` (all tenant queries filter on it).
 - `unique(userId, organizationId)` on Membership.
 - `unique(registrationId)` on Attendance.
-- Index `Event(organizationId, status, startAt)` for dashboard queries.
+- `@@index([organizationId])` + `@@index([organizationId, status])` on Event
+  (shipped) — the latter backs status-filtered list/dashboard queries.
 - Soft-delete via `deletedAt` on User for PDPA anonymization; hard-delete jobs
   configurable per retention policy.
 
