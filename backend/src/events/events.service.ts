@@ -160,7 +160,8 @@ export class EventsService {
         await tx.event.delete({ where: { id: eventId, organizationId } });
         await this.audit.record({
           organizationId, actorUserId, action: 'event.delete',
-          targetType: 'Event', targetId: eventId, metadata: { eventId },
+          targetType: 'Event', targetId: eventId,
+          metadata: { eventId, title: current.title },
         }, tx);
         return { removed: true as const };
       });
