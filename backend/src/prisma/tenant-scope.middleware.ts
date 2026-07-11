@@ -1,8 +1,8 @@
 import { Prisma } from '@prisma/client';
 
 // Models carrying organizationId that must never be queried unscoped.
-// Grows as Event/Registration/Attendance/Certificate land.
-export const TENANT_SCOPED_MODELS: Prisma.ModelName[] = ['Membership', 'AuditLog', 'Event'];
+// Grows as Attendance/Certificate land.
+export const TENANT_SCOPED_MODELS: Prisma.ModelName[] = ['Membership', 'AuditLog', 'Event', 'Registration'];
 
 // Filtering actions where a missing organizationId filter would leak across tenants.
 // findUnique/findUniqueOrThrow (unique index) and create/createMany (no where) are exempt by design.

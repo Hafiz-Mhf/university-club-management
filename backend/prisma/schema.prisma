@@ -31,6 +31,21 @@ enum EventStatus {
   CANCELLED
 }
 
+enum RegistrationStatus {
+  PENDING     // reserved for a future manual-review/payment flow; unused by this module
+  APPROVED
+  WAITLISTED
+  REJECTED
+  CANCELLED
+}
+
+enum FormFieldType {
+  TEXT
+  TEXTAREA
+  SELECT
+  CHECKBOX
+}
+
 model User {
   id           String       @id @default(uuid())
   email        String       @unique
@@ -39,6 +54,8 @@ model User {
   mfaSecret    String?
   memberships  Membership[]
   refreshTokens RefreshToken[]
+  registrations   Registration[]
+  consentRecords  ConsentRecord[]
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
   deletedAt    DateTime?
@@ -106,11 +123,64 @@ model Event {
   status          EventStatus  @default(DRAFT)
   createdByUserId String?
   organization    Organization @relation(fields: [organizationId], references: [id])
+  registrationForm RegistrationForm?
+  registrations    Registration[]
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
   @@index([organizationId])
   @@index([organizationId, status])
+}
+
+model RegistrationForm {
+  id        String      @id @default(uuid())
+  eventId   String      @unique
+  event     Event       @relation(fields: [eventId], references: [id])
+  fields    FormField[]
+  createdAt DateTime    @default(now())
+}
+
+model FormField {
+  id                 String           @id @default(uuid())
+  registrationFormId String
+  registrationForm   RegistrationForm @relation(fields: [registrationFormId], references: [id])
+  label              String
+  type               FormFieldType
+  required           Boolean          @default(false)
+  options            Json?
+  order              Int
+
+  @@index([registrationFormId])
+}
+
+model Registration {
+  id              String             @id @default(uuid())
+  eventId         String
+  organizationId  String
+  userId          String
+  answers         Json?
+  status          RegistrationStatus @default(APPROVED)
+  consentRecordId String             @unique
+  event           Event              @relation(fields: [eventId], references: [id])
+  user            User               @relation(fields: [userId], references: [id])
+  consentRecord   ConsentRecord      @relation(fields: [consentRecordId], references: [id])
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@unique([eventId, userId])
+  @@index([organizationId])
+  @@index([eventId, status])
+}
+
+model ConsentRecord {
+  id            String        @id @default(uuid())
+  userId        String
+  purpose       String
+  policyVersion String
+  grantedAt     DateTime      @default(now())
+  ipAddress     String?
+  user          User          @relation(fields: [userId], references: [id])
+  registration  Registration?
 }
 
 model AuditLog {

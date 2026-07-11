@@ -51,4 +51,21 @@ describe('tenant-scope middleware', () => {
     });
     expect(Array.isArray(rows)).toBe(true);
   });
+
+  it('throws when Registration.findMany omits organizationId', async () => {
+    await expect(prisma.registration.findMany({})).rejects.toThrow(/Tenant scope violation/);
+  });
+
+  it('throws when Registration.findMany where lacks organizationId', async () => {
+    await expect(
+      prisma.registration.findMany({ where: { status: 'APPROVED' } }),
+    ).rejects.toThrow(/Tenant scope violation/);
+  });
+
+  it('allows Registration.findMany scoped by organizationId', async () => {
+    const rows = await prisma.registration.findMany({
+      where: { organizationId: '00000000-0000-0000-0000-000000000000' },
+    });
+    expect(Array.isArray(rows)).toBe(true);
+  });
 });
