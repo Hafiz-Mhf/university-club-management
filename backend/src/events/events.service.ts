@@ -151,4 +151,24 @@ export class EventsService {
       (s) => s === 'DRAFT' || s === 'PUBLISHED', actorUserId,
     );
   }
+
+  async remove(organizationId: string, eventId: string, actorUserId?: string): Promise<{ removed: true }> {
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const current = await tx.event.findFirst({ where: { id: eventId, organizationId } });
+        if (!current) throw new NotFoundException('Event not found in this organization');
+        await tx.event.delete({ where: { id: eventId, organizationId } });
+        await this.audit.record({
+          organizationId, actorUserId, action: 'event.delete',
+          targetType: 'Event', targetId: eventId, metadata: { eventId },
+        }, tx);
+        return { removed: true as const };
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+        throw new NotFoundException('Event not found in this organization');
+      }
+      throw error;
+    }
+  }
 }

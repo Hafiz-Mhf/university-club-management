@@ -80,4 +80,23 @@ describe('Events lifecycle (e2e)', () => {
     await request(app.getHttpServer()).post(`/organizations/${orgId}/events/${id}/cancel`)
       .set('Authorization', `Bearer ${committeeToken}`).expect(403);
   });
+
+  it('removes an event (MANAGE_MEMBERS)', async () => {
+    const id = await createEvent({ title: 'Deleteme', startAt: future(2), endAt: future(3) });
+    await request(app.getHttpServer()).delete(`/organizations/${orgId}/events/${id}`)
+      .set('Authorization', `Bearer ${presToken}`).expect(200);
+    await request(app.getHttpServer()).get(`/organizations/${orgId}/events/${id}`)
+      .set('Authorization', `Bearer ${presToken}`).expect(404);
+  });
+
+  it('forbids a COMMITTEE member from deleting', async () => {
+    const id = await createEvent({ title: 'NoDelete', startAt: future(2), endAt: future(3) });
+    await request(app.getHttpServer()).delete(`/organizations/${orgId}/events/${id}`)
+      .set('Authorization', `Bearer ${committeeToken}`).expect(403);
+  });
+
+  it('404 deleting an event not in this org', async () => {
+    await request(app.getHttpServer()).delete(`/organizations/${orgId}/events/00000000-0000-0000-0000-000000000000`)
+      .set('Authorization', `Bearer ${presToken}`).expect(404);
+  });
 });
