@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { Request } from 'express';
 import { RegistrationsService } from './registrations.service';
 import { RegisterDto } from './dto/register.dto';
@@ -41,5 +41,28 @@ export class RegistrationsController {
   @Get('me')
   mine(@OrgId() orgId: string, @Param('eventId') eventId: string, @CurrentUser() user: { userId: string }) {
     return this.registrations.findMine(orgId, eventId, user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard, TenantGuard)
+  @Post(':registrationId/cancel')
+  @HttpCode(200)
+  cancel(
+    @OrgId() orgId: string,
+    @Param('registrationId') registrationId: string,
+    @CurrentUser() user: { userId: string },
+  ) {
+    return this.registrations.cancel(orgId, registrationId, user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
+  @Roles(...MANAGE_EVENTS)
+  @Post(':registrationId/reject')
+  @HttpCode(200)
+  reject(
+    @OrgId() orgId: string,
+    @Param('registrationId') registrationId: string,
+    @CurrentUser() user: { userId: string },
+  ) {
+    return this.registrations.reject(orgId, registrationId, user.userId);
   }
 }

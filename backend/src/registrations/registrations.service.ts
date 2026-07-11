@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -139,6 +139,76 @@ export class RegistrationsService {
     return this.prisma.registration.findFirst({
       where: { eventId, organizationId, userId },
     });
+  }
+
+  async cancel(organizationId: string, registrationId: string, actorUserId?: string) {
+    const current = await this.prisma.registration.findFirst({ where: { id: registrationId, organizationId } });
+    if (!current) throw new NotFoundException('Registration not found in this organization');
+    if (current.userId !== actorUserId) {
+      throw new ForbiddenException('You can only cancel your own registration');
+    }
+    return this.resolve(organizationId, registrationId, 'CANCELLED', 'registration.cancel', actorUserId);
+  }
+
+  reject(organizationId: string, registrationId: string, actorUserId?: string) {
+    return this.resolve(organizationId, registrationId, 'REJECTED', 'registration.reject', actorUserId);
+  }
+
+  private async resolve(
+    organizationId: string,
+    registrationId: string,
+    terminalStatus: 'CANCELLED' | 'REJECTED',
+    action: 'registration.cancel' | 'registration.reject',
+    actorUserId?: string,
+  ) {
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const current = await tx.registration.findFirst({ where: { id: registrationId, organizationId } });
+        if (!current) throw new NotFoundException('Registration not found in this organization');
+        if (current.status === 'REJECTED' || current.status === 'CANCELLED') {
+          throw new ConflictException(`Registration is already ${current.status}`);
+        }
+
+        // Compare-and-swap: same pattern as EventsService.transition() — a
+        // concurrent resolve on the same row loses with P2025 (409), never
+        // writes an audit row, and never double-promotes the waitlist.
+        const updated = await tx.registration.update({
+          where: { id: registrationId, organizationId, status: current.status },
+          data: { status: terminalStatus },
+        });
+
+        await this.audit.record({
+          organizationId, actorUserId, action,
+          targetType: 'Registration', targetId: registrationId,
+          metadata: { registrationId, from: current.status, to: terminalStatus },
+        }, tx);
+
+        if (current.status === 'APPROVED') {
+          const promoted = await tx.registration.findFirst({
+            where: { eventId: current.eventId, organizationId, status: 'WAITLISTED' },
+            orderBy: { createdAt: 'asc' },
+          });
+          if (promoted) {
+            await tx.registration.update({
+              where: { id: promoted.id, organizationId, status: 'WAITLISTED' },
+              data: { status: 'APPROVED' },
+            });
+            await this.audit.record({
+              organizationId, actorUserId, action: 'registration.promote',
+              targetType: 'Registration', targetId: promoted.id,
+              metadata: { registrationId: promoted.id, eventId: current.eventId },
+            }, tx);
+          }
+        }
+
+        return updated;
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+        throw new ConflictException('Registration was modified concurrently — please retry');
+      }
+      throw error;
+    }
   }
 
   private validateAnswers(
