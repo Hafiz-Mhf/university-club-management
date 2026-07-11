@@ -32,17 +32,40 @@ export class RegistrationsService {
       include: { fields: true },
     });
     this.validateAnswers(form, dto.answers);
+    const answers = this.projectAnswers(form, dto.answers);
+
+    // Find-or-create: a returning participant registering for a second event
+    // in this org must not error, and must not have their existing role/status
+    // overwritten (empty update = no-op if already a member).
+    //
+    // This runs OUTSIDE the registration transaction on purpose: Postgres
+    // aborts an interactive transaction on any error, so a swallowed P2002
+    // from a concurrent first-time upsert would poison the whole tx. The
+    // trade-off — a registration that subsequently fails (e.g. duplicate
+    // → 409) may leave the PARTICIPANT membership behind — is intentional:
+    // registering expresses intent to join the org.
+    try {
+      await this.prisma.membership.upsert({
+        where: { userId_organizationId: { userId, organizationId } },
+        create: { userId, organizationId, role: 'PARTICIPANT', status: 'ACTIVE' },
+        update: {},
+      });
+    } catch (error) {
+      const isConcurrentMembershipCreate =
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002' &&
+        this.p2002Targets(error).includes('organizationId');
+      // A concurrent request already created the membership — goal satisfied.
+      if (!isConcurrentMembershipCreate) throw error;
+    }
 
     try {
       return await this.prisma.$transaction(async (tx) => {
-        // Find-or-create: a returning participant registering for a second
-        // event in this org must not error, and must not have their existing
-        // role/status overwritten (empty update = no-op if already a member).
-        await tx.membership.upsert({
-          where: { userId_organizationId: { userId, organizationId } },
-          create: { userId, organizationId, role: 'PARTICIPANT', status: 'ACTIVE' },
-          update: {},
-        });
+        // Serialize registrations per event: without this row lock the
+        // count-then-create below is racy at READ COMMITTED and concurrent
+        // registrants can overshoot capacity. (Template-literal $queryRaw is
+        // parameterized — safe.)
+        await tx.$queryRaw`SELECT id FROM "Event" WHERE id = ${eventId} FOR UPDATE`;
 
         const approvedCount = await tx.registration.count({
           where: { eventId, organizationId, status: 'APPROVED' },
@@ -57,7 +80,7 @@ export class RegistrationsService {
         const registration = await tx.registration.create({
           data: {
             eventId, organizationId, userId,
-            answers: (dto.answers ?? undefined) as Prisma.InputJsonValue | undefined,
+            answers: (answers ?? undefined) as Prisma.InputJsonValue | undefined,
             status,
             consentRecordId: consentRecord.id,
           },
@@ -72,11 +95,37 @@ export class RegistrationsService {
         return registration;
       });
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      // Target-checked so a future unique constraint in this transaction
+      // cannot be mislabeled as a duplicate registration: only
+      // Registration.[eventId, userId] maps to this 409.
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002' &&
+        this.p2002Targets(error).includes('eventId')
+      ) {
         throw new ConflictException('You are already registered for this event');
       }
       throw error;
     }
+  }
+
+  private p2002Targets(error: Prisma.PrismaClientKnownRequestError): string[] {
+    const target = error.meta?.target;
+    if (Array.isArray(target)) return target.map(String);
+    if (typeof target === 'string') return [target];
+    return [];
+  }
+
+  // Allowlist projection: only keys matching the form's field ids are
+  // persisted — unknown keys are dropped, never stored. With no form,
+  // validateAnswers has already rejected any non-empty answers.
+  private projectAnswers(
+    form: { fields: FormFieldForValidation[] } | null,
+    answers: Record<string, string | string[]> | undefined,
+  ): Record<string, string | string[]> | undefined {
+    if (!form || !answers) return answers;
+    const allowed = new Set(form.fields.map((f) => f.id));
+    return Object.fromEntries(Object.entries(answers).filter(([key]) => allowed.has(key)));
   }
 
   private validateAnswers(
@@ -93,6 +142,12 @@ export class RegistrationsService {
       const value = answers?.[field.id];
       if (field.required && (value === undefined || value === null || value === '')) {
         throw new BadRequestException(`Missing required field: ${field.label}`);
+      }
+      // 'true' (string) is the canonical checked value for CHECKBOX answers —
+      // a required checkbox submitted as 'false' (or anything else) is not
+      // accepted, otherwise "required" could be bypassed with an unchecked box.
+      if (field.type === 'CHECKBOX' && field.required && value !== 'true') {
+        throw new BadRequestException(`Required checkbox not accepted: ${field.label}`);
       }
       if (field.type === 'SELECT' && value !== undefined) {
         const options = (field.options as string[] | null) ?? [];

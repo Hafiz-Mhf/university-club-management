@@ -90,4 +90,48 @@ describe('Register for an event (e2e)', () => {
       .post(`/organizations/${orgId}/events/${formed.body.id}/registrations`)
       .set('Authorization', `Bearer ${token}`).send({ answers: {} }).expect(400);
   });
+
+  it('400 for a required CHECKBOX answered "false"; 201 when "true"', async () => {
+    const ev = await request(app.getHttpServer()).post(`/organizations/${orgId}/events`)
+      .set('Authorization', `Bearer ${presToken}`).send({ title: 'Checkbox Event', startAt: future(5), endAt: future(6) });
+    const put = await request(app.getHttpServer())
+      .put(`/organizations/${orgId}/events/${ev.body.id}/registration-form`)
+      .set('Authorization', `Bearer ${presToken}`)
+      .send({ fields: [{ label: 'I agree to the terms', type: 'CHECKBOX', required: true, order: 0 }] }).expect(200);
+    const fieldId = put.body.fields[0].id;
+    await request(app.getHttpServer()).post(`/organizations/${orgId}/events/${ev.body.id}/publish`)
+      .set('Authorization', `Bearer ${presToken}`).expect(200);
+
+    const email = `cbreg-${Date.now()}@test.io`;
+    await register(email);
+    const token = await login(email);
+    await request(app.getHttpServer())
+      .post(`/organizations/${orgId}/events/${ev.body.id}/registrations`)
+      .set('Authorization', `Bearer ${token}`).send({ answers: { [fieldId]: 'false' } }).expect(400);
+    await request(app.getHttpServer())
+      .post(`/organizations/${orgId}/events/${ev.body.id}/registrations`)
+      .set('Authorization', `Bearer ${token}`).send({ answers: { [fieldId]: 'true' } }).expect(201);
+  });
+
+  it('drops unknown answer keys (allowlist) but still registers with 201', async () => {
+    const ev = await request(app.getHttpServer()).post(`/organizations/${orgId}/events`)
+      .set('Authorization', `Bearer ${presToken}`).send({ title: 'Allowlist Event', startAt: future(5), endAt: future(6) });
+    const put = await request(app.getHttpServer())
+      .put(`/organizations/${orgId}/events/${ev.body.id}/registration-form`)
+      .set('Authorization', `Bearer ${presToken}`)
+      .send({ fields: [{ label: 'Nickname', type: 'TEXT', required: true, order: 0 }] }).expect(200);
+    const fieldId = put.body.fields[0].id;
+    await request(app.getHttpServer()).post(`/organizations/${orgId}/events/${ev.body.id}/publish`)
+      .set('Authorization', `Bearer ${presToken}`).expect(200);
+
+    const email = `junkreg-${Date.now()}@test.io`;
+    await register(email);
+    const token = await login(email);
+    const res = await request(app.getHttpServer())
+      .post(`/organizations/${orgId}/events/${ev.body.id}/registrations`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ answers: { [fieldId]: 'Zed', totallyUnknownKey: 'junk' } }).expect(201);
+    expect(res.body.answers[fieldId]).toBe('Zed');
+    expect(res.body.answers).not.toHaveProperty('totallyUnknownKey');
+  });
 });
