@@ -12,6 +12,7 @@ describe('Registrations tenant isolation (e2e)', () => {
   let bOrgId: string;
   let bEventId: string;
   let bRegistrationId: string;
+  let bpToken: string;
   const a = `ria-${Date.now()}@test.io`;
   const b = `rib-${Date.now()}@test.io`;
   const bParticipant = `ribp-${Date.now()}@test.io`;
@@ -39,7 +40,7 @@ describe('Registrations tenant isolation (e2e)', () => {
     bToken = B.token; bOrgId = B.orgId; bEventId = B.eventId;
 
     await request(app.getHttpServer()).post('/auth/register').send({ email: bParticipant, password: 'password123', fullName: bParticipant });
-    const bpToken = (await request(app.getHttpServer()).post('/auth/login').send({ email: bParticipant, password: 'password123' })).body.accessToken;
+    bpToken = (await request(app.getHttpServer()).post('/auth/login').send({ email: bParticipant, password: 'password123' })).body.accessToken;
     const reg = await request(app.getHttpServer())
       .post(`/organizations/${bOrgId}/events/${bEventId}/registrations`)
       .set('Authorization', `Bearer ${bpToken}`).send({}).expect(201);
@@ -105,6 +106,34 @@ describe('Registrations tenant isolation (e2e)', () => {
     const found = res.body.find((r: { id: string }) => r.id === bRegistrationId);
     expect(found).toBeDefined();
     expect(found.status).toBe('APPROVED');
+  });
+
+  it("id-guessing: cancelling B's registration through A's own org + B's eventId 404s, and B's registration is untouched", async () => {
+    await request(app.getHttpServer())
+      .post(`/organizations/${aOrgId}/events/${bEventId}/registrations/${bRegistrationId}/cancel`)
+      .set('Authorization', `Bearer ${aToken}`).expect(404);
+
+    const res = await request(app.getHttpServer())
+      .get(`/organizations/${bOrgId}/events/${bEventId}/registrations`)
+      .set('Authorization', `Bearer ${bToken}`).expect(200);
+    const found = res.body.find((r: { id: string }) => r.id === bRegistrationId);
+    expect(found).toBeDefined();
+    expect(found.status).toBe('APPROVED');
+  });
+
+  it('A (no membership in B) cannot read /me on a B event (403 from TenantGuard)', () =>
+    request(app.getHttpServer()).get(`/organizations/${bOrgId}/events/${bEventId}/registrations/me`)
+      .set('Authorization', `Bearer ${aToken}`).expect(403));
+
+  it("id-guessing: B participant reads /me with another org's eventId — org-scoped lookup finds nothing (200, empty body)", async () => {
+    // findMine is org-scoped (eventId + organizationId + userId): A's eventId
+    // never matches inside org B, so the service returns null. Nest's default
+    // reply path serializes a null return as an empty body with 200 — no
+    // existence leak about A's event, and never B-org data for a foreign event.
+    const res = await request(app.getHttpServer())
+      .get(`/organizations/${bOrgId}/events/${aEventId}/registrations/me`)
+      .set('Authorization', `Bearer ${bpToken}`).expect(200);
+    expect(res.text).toBe('');
   });
 
   it("B's registration survives A's isolation attempts", async () => {
