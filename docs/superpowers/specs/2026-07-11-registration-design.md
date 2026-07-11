@@ -308,9 +308,15 @@ Per-task e2e specs:
   attempt (403); committee (including `COMMITTEE` role, since `reject` is
   `MANAGE_EVENTS`) rejects (200); double-cancel/double-reject on an already
   terminal registration → 409.
-- `registrations-isolation`: org A cannot register into / list / cancel /
-  reject org B's registrations, or read/write org B's form; id-guessing
-  through A's own org → 404; wrong-org → 403; survival assertion.
+- `registrations-isolation`: org A cannot list / cancel / reject org B's
+  registrations, or read/write org B's form (wrong-org → 403 via
+  `TenantGuard`); registering for org B's event through **org A's own URL
+  path** (`eventId` mismatched to `orgId`) → 404 (id-guessing). Note:
+  self-*registration* into an org B event using B's own correct path is
+  intentionally NOT an isolation violation — any authenticated user may
+  register for any org's `PUBLISHED` event by design (§3); this suite tests
+  the boundary around *managing* registrations, not around who may create
+  one. Survival assertion included.
 
 Unit: extend the tenant-scope middleware spec to assert `Registration` is
 scoped (mirrors the `Event` case added in the previous plan).
