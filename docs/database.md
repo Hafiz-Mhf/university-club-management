@@ -79,21 +79,28 @@ written by every module; ConsentRecord is user+purpose scoped).
 | — | `@@index([organizationId])` | tenant-scoped queries |
 | — | `@@index([organizationId, status])` | list/status filtering (e.g. hiding DRAFT from non-managers) |
 
-### RegistrationForm / FormField
+### RegistrationForm / FormField (shipped)
 `RegistrationForm` (1:1 Event) → many `FormField` (label, type, required,
 options jsonb, order). Lets committees replace Google Forms with custom fields.
+Neither table carries its own `organizationId` — isolation is enforced via an
+org-scoped `Event` lookup (`findFirst({ id: eventId, organizationId })`)
+before every read/write, since `Event.organizationId` never changes after
+creation.
 
-### Registration
+### Registration (shipped)
 | Field | Type | Notes |
 |-------|------|-------|
 | id | uuid (PK) | |
-| eventId | uuid (FK) | |
-| organizationId | uuid (FK) | denormalized for scope |
-| userId | uuid (FK → User), nullable | nullable for non-account participants |
-| answers | jsonb | form responses |
-| status | enum (pending, approved, waitlisted, rejected, cancelled) | |
-| consentRecordId | uuid (FK → ConsentRecord) | consent snapshot |
-| createdAt | timestamp | |
+| eventId | uuid (FK → Event) | |
+| organizationId | uuid (FK → Organization) | denormalized for scope |
+| userId | uuid (FK → User) | **non-nullable** — every registrant is an authenticated `User`, auto-enrolled as a `PARTICIPANT` member on registration; this module has no guest/non-account registration path |
+| answers | jsonb, nullable | form responses, allowlist-projected onto the form's field ids before storage |
+| status | enum `RegistrationStatus` (`PENDING, APPROVED, WAITLISTED, REJECTED, CANCELLED`) | `PENDING` reserved for a future manual-review/payment flow, unused by this module; default `APPROVED` |
+| consentRecordId | uuid (FK → ConsentRecord), unique | consent snapshot, 1:1 |
+| createdAt / updatedAt | timestamp | |
+| — | `@@unique([eventId, userId])` | one registration per user per event |
+| — | `@@index([organizationId])` | tenant-scoped queries |
+| — | `@@index([eventId, status])` | capacity counts + waitlist FIFO promotion |
 
 ### Attendance
 | Field | Type | Notes |
@@ -118,11 +125,11 @@ options jsonb, order). Lets committees replace Google Forms with custom fields.
 | uploadedBy | uuid (FK → User) | committee |
 | createdAt | timestamp | |
 
-### ConsentRecord (PDPA)
+### ConsentRecord (PDPA) (shipped)
 | Field | Type | Notes |
 |-------|------|-------|
 | id | uuid (PK) | |
-| userId | uuid (FK), nullable | |
+| userId | uuid (FK → User) | **non-nullable** — same reason as `Registration.userId`: every consent is captured for an authenticated `User`, no anonymous/guest path |
 | purpose | string | e.g. event-registration |
 | policyVersion | string | for consent re-prompt |
 | grantedAt | timestamp | |

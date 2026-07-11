@@ -139,6 +139,70 @@ Invariants enforced in `EventsService`:
   `{eventId, from, to}`, `event.delete` `{eventId, title}` — metadata is
   ids/enum values/title only, never personal data.
 
+### As built — registration (shipped)
+
+No new role group: `MANAGE_EVENTS` (see above) is reused for registration-form
+management (`PUT`/`DELETE` on `registration-form`) and for the committee
+side of registrations (`GET` list, `POST /:registrationId/reject`).
+
+Endpoints (`/organizations/:orgId/events/:eventId/registrations` +
+`.../registration-form`):
+
+| Route | Tier | Notes |
+|---|---|---|
+| `POST /registrations` | any authenticated user (`JwtAuthGuard` only — **no `TenantGuard`**) | self-registration; see below |
+| `GET /registrations` | MANAGE_EVENTS | list all registrations for the event |
+| `GET /registrations/me` | any org member (TenantGuard only) | caller's own registration |
+| `POST /registrations/:id/cancel` | any org member (TenantGuard only) | ownership-checked, see below |
+| `POST /registrations/:id/reject` | MANAGE_EVENTS | any registration in the org |
+| `PUT` / `GET` / `DELETE registration-form` | `PUT`/`DELETE`: MANAGE_EVENTS; `GET`: any org member | form GET has no `RolesGuard` |
+
+**Self-enrollment mechanism (deliberate cross-org design):** `POST
+/registrations` is the only route in the codebase that skips `TenantGuard`,
+reading `orgId` from the route param instead of `req.organizationId`. Any
+authenticated user may register for any org's `PUBLISHED` event, even if they
+hold no `Membership` in that org yet — `RegistrationsService.register()`
+upserts a `PARTICIPANT` `Membership` for the caller as part of registering.
+This is intentional, not an isolation gap: participants discover and join
+events/clubs they are not members of yet, and self-registration is how that
+first membership is created. Every other registration operation (list,
+cancel, reject, form management) is fully tenant-isolated through the normal
+`TenantGuard` + org-scoped `where` pattern.
+
+**Capacity / waitlist invariant:** `register()` takes a `SELECT ... FOR
+UPDATE` lock on the `Event` row before counting `APPROVED` registrations for
+that event (org-scoped), serializing concurrent registrants against the same
+capacity. Below `event.capacity` (or `capacity === null` = unlimited) →
+`APPROVED`; at/over capacity → `WAITLISTED`. When an `APPROVED` registration
+resolves to a terminal state (`cancel` or `reject`), the same transaction
+promotes the oldest `WAITLISTED` registration for that event (`createdAt`
+asc, FIFO) to `APPROVED`. Promotion uses a CAS `updateMany` loop (not a single
+`update`) so a race against a concurrent `resolve()` on a different
+registration for the same event degrades to "try the next-oldest waitlisted
+row" instead of aborting the whole transaction.
+
+**Cancel vs. reject split:** `cancel` is self-service — the caller may only
+cancel their **own** registration (403 if not, checked after a 404
+existence/org-scope check). `reject` is committee-only (MANAGE_EVENTS) and
+can act on **any** registration in the org. Both funnel into the same
+`resolve()` helper: terminal states (`REJECTED`, `CANCELLED`) are final — a
+second resolve attempt on an already-terminal registration is a 409, and a
+concurrent resolve on the same row loses via compare-and-swap (`update` with
+`status: current.status` in the `where`) mapped to 409, never writing an
+audit row for the loser.
+
+**Audit actions:** `registration.create` `{registrationId, eventId, status}`,
+`registration.cancel` / `registration.reject` `{registrationId, from, to}`,
+`registration.promote` `{registrationId, eventId}`, `form.upsert`
+`{eventId, fieldCount}`, `form.delete` `{eventId}` — metadata is ids/enum
+values/counts only; registration **answers are never logged**, in keeping
+with the "never personal data in logs" rule.
+
+**PDPA note:** a `ConsentRecord` (purpose `event-registration`,
+`policyVersion`, `grantedAt`, `ipAddress`) is written in the same transaction
+as every `Registration`, ahead of the full PDPA module (roadmap item 11),
+which will own the export/delete/anonymize endpoints described in §5 below.
+
 ---
 
 ## 3. Multi-Tenant Isolation
