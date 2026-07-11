@@ -128,6 +128,19 @@ export class RegistrationsService {
     return Object.fromEntries(Object.entries(answers).filter(([key]) => allowed.has(key)));
   }
 
+  list(organizationId: string, eventId: string) {
+    return this.prisma.registration.findMany({
+      where: { eventId, organizationId },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  findMine(organizationId: string, eventId: string, userId: string) {
+    return this.prisma.registration.findFirst({
+      where: { eventId, organizationId, userId },
+    });
+  }
+
   private validateAnswers(
     form: { fields: FormFieldForValidation[] } | null,
     answers: Record<string, string | string[]> | undefined,

@@ -1,9 +1,14 @@
-import { Body, Controller, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { Request } from 'express';
 import { RegistrationsService } from './registrations.service';
 import { RegisterDto } from './dto/register.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { TenantGuard } from '../tenancy/tenant.guard';
+import { RolesGuard } from '../rbac/roles.guard';
+import { Roles } from '../rbac/roles.decorator';
+import { OrgId } from '../tenancy/org-id.decorator';
+import { MANAGE_EVENTS } from '../rbac/role-groups';
 
 @Controller('organizations/:orgId/events/:eventId/registrations')
 export class RegistrationsController {
@@ -23,5 +28,18 @@ export class RegistrationsController {
     @Req() req: Request,
   ) {
     return this.registrations.register(orgId, eventId, user.userId, dto, req.ip);
+  }
+
+  @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
+  @Roles(...MANAGE_EVENTS)
+  @Get()
+  list(@OrgId() orgId: string, @Param('eventId') eventId: string) {
+    return this.registrations.list(orgId, eventId);
+  }
+
+  @UseGuards(JwtAuthGuard, TenantGuard)
+  @Get('me')
+  mine(@OrgId() orgId: string, @Param('eventId') eventId: string, @CurrentUser() user: { userId: string }) {
+    return this.registrations.findMine(orgId, eventId, user.userId);
   }
 }
