@@ -184,20 +184,37 @@ export class RegistrationsService {
         }, tx);
 
         if (current.status === 'APPROVED') {
-          const promoted = await tx.registration.findFirst({
-            where: { eventId: current.eventId, organizationId, status: 'WAITLISTED' },
-            orderBy: { createdAt: 'asc' },
-          });
-          if (promoted) {
-            await tx.registration.update({
-              where: { id: promoted.id, organizationId, status: 'WAITLISTED' },
+          // Promotion is CAS'd via updateMany (not update): a concurrent resolve()
+          // on a DIFFERENT registration for this event can race to promote the
+          // SAME oldest-WAITLISTED row. update() would throw P2025 on a lost race,
+          // and Postgres aborts the whole interactive transaction on any error —
+          // that would roll back this caller's own, perfectly valid CAS above.
+          // updateMany() returns { count: 0 } instead of throwing, so a lost race
+          // just advances to the next-oldest candidate while this transaction
+          // stays healthy.
+          const attempted: string[] = [];
+          for (;;) {
+            const candidate = await tx.registration.findFirst({
+              where: { eventId: current.eventId, organizationId, status: 'WAITLISTED', id: { notIn: attempted } },
+              orderBy: { createdAt: 'asc' },
+            });
+            if (!candidate) break;
+
+            const { count } = await tx.registration.updateMany({
+              where: { id: candidate.id, organizationId, status: 'WAITLISTED' },
               data: { status: 'APPROVED' },
             });
-            await this.audit.record({
-              organizationId, actorUserId, action: 'registration.promote',
-              targetType: 'Registration', targetId: promoted.id,
-              metadata: { registrationId: promoted.id, eventId: current.eventId },
-            }, tx);
+            if (count === 1) {
+              await this.audit.record({
+                organizationId, actorUserId, action: 'registration.promote',
+                targetType: 'Registration', targetId: candidate.id,
+                metadata: { registrationId: candidate.id, eventId: current.eventId },
+              }, tx);
+              break;
+            }
+            // Lost the race for this candidate — a concurrent resolve() promoted
+            // it first. Don't re-pick it; try the next-oldest WAITLISTED row.
+            attempted.push(candidate.id);
           }
         }
 

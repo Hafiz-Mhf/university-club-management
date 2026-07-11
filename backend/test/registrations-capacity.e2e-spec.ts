@@ -67,4 +67,47 @@ describe('Capacity + waitlist (e2e)', () => {
       .set('Authorization', `Bearer ${t3}`).expect(200);
     expect(r3check.body.status).toBe('WAITLISTED');
   });
+
+  // Regression: two concurrent cancels of two DIFFERENT APPROVED registrations
+  // on the same event both race to promote the SAME oldest-WAITLISTED row.
+  // Before the fix, the losing promote's P2025 aborted its whole transaction —
+  // rolling back that caller's own valid cancel and returning a spurious 409.
+  it('concurrent cancels of different APPROVED registrations both succeed and the waitlisted one promotes', async () => {
+    const event = await request(app.getHttpServer()).post(`/organizations/${orgId}/events`)
+      .set('Authorization', `Bearer ${presToken}`).send({ title: 'Concurrent Cancel Event', startAt: future(5), endAt: future(6), capacity: 2 });
+    const raceEventId = event.body.id;
+    await request(app.getHttpServer()).post(`/organizations/${orgId}/events/${raceEventId}/publish`)
+      .set('Authorization', `Bearer ${presToken}`).expect(200);
+
+    const registerRace = (token: string) => request(app.getHttpServer())
+      .post(`/organizations/${orgId}/events/${raceEventId}/registrations`)
+      .set('Authorization', `Bearer ${token}`).send({});
+
+    const ta = await registerAndLogin(`race-a-${Date.now()}@test.io`);
+    const tb = await registerAndLogin(`race-b-${Date.now()}@test.io`);
+    const tc = await registerAndLogin(`race-c-${Date.now()}@test.io`);
+
+    const ra = await registerRace(ta);
+    const rb = await registerRace(tb);
+    const rc = await registerRace(tc);
+    expect(ra.body.status).toBe('APPROVED');
+    expect(rb.body.status).toBe('APPROVED');
+    expect(rc.body.status).toBe('WAITLISTED');
+
+    const [cancelA, cancelB] = await Promise.all([
+      request(app.getHttpServer())
+        .post(`/organizations/${orgId}/events/${raceEventId}/registrations/${ra.body.id}/cancel`)
+        .set('Authorization', `Bearer ${ta}`),
+      request(app.getHttpServer())
+        .post(`/organizations/${orgId}/events/${raceEventId}/registrations/${rb.body.id}/cancel`)
+        .set('Authorization', `Bearer ${tb}`),
+    ]);
+    expect(cancelA.status).toBe(200);
+    expect(cancelB.status).toBe(200);
+
+    const rcCheck = await request(app.getHttpServer())
+      .get(`/organizations/${orgId}/events/${raceEventId}/registrations/me`)
+      .set('Authorization', `Bearer ${tc}`).expect(200);
+    expect(rcCheck.body.status).toBe('APPROVED');
+  });
 });
