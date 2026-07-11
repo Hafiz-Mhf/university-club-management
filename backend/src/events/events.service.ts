@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma, Role } from '@prisma/client';
+import { EventStatus, Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CreateEventDto } from './dto/create-event.dto';
@@ -93,7 +93,7 @@ export class EventsService {
     eventId: string,
     action: 'event.publish' | 'event.complete' | 'event.cancel',
     to: 'PUBLISHED' | 'COMPLETED' | 'CANCELLED',
-    canTransition: (status: string) => boolean,
+    canTransition: (status: EventStatus) => boolean,
     actorUserId?: string,
     extraGuard?: (event: { endAt: Date }) => void,
   ) {
@@ -101,11 +101,26 @@ export class EventsService {
       const current = await tx.event.findFirst({ where: { id: eventId, organizationId } });
       if (!current) throw new NotFoundException('Event not found in this organization');
       if (!canTransition(current.status)) {
-        throw new ConflictException(`Cannot ${action} an event in ${current.status}`);
+        const verb = action.split('.')[1];
+        throw new ConflictException(`Cannot ${verb} an event in ${current.status}`);
       }
       if (extraGuard) extraGuard(current);
 
-      const updated = await tx.event.update({ where: { id: eventId, organizationId }, data: { status: to } });
+      // Compare-and-swap: only update if the status is still the one we validated,
+      // so a concurrent transition loses with P2025 (and never writes an audit row)
+      // instead of blindly overwriting the winner's state.
+      let updated;
+      try {
+        updated = await tx.event.update({
+          where: { id: eventId, organizationId, status: current.status },
+          data: { status: to },
+        });
+      } catch (error) {
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+          throw new ConflictException('Event was modified concurrently — please retry');
+        }
+        throw error;
+      }
       await this.audit.record({
         organizationId, actorUserId, action,
         targetType: 'Event', targetId: eventId,
