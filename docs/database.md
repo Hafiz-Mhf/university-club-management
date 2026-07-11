@@ -74,7 +74,7 @@ written by every module; ConsentRecord is user+purpose scoped).
 | capacity | int, nullable | `null` = unlimited; capacity enforcement deferred to the Registration module |
 | bannerKey | string, nullable | private storage key; upload flow deferred to the storage module |
 | status | enum `EventStatus` (DRAFT, PUBLISHED, COMPLETED, CANCELLED) | lifecycle, default `DRAFT` |
-| createdByUserId | uuid (FK → User), nullable | |
+| createdByUserId | uuid, nullable | creator's user id (plain column, no FK relation) |
 | createdAt / updatedAt | timestamp | |
 | — | `@@index([organizationId])` | tenant-scoped queries |
 | — | `@@index([organizationId, status])` | list/status filtering (e.g. hiding DRAFT from non-managers) |

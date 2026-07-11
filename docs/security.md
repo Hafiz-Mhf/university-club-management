@@ -152,9 +152,9 @@ Invariants enforced in `EventsService`:
   id surfaces as P2025 → 404. This is the established pattern in
   `MembershipsService`.
 - **Mandatory automated tests:** org A must never read or write org B's data.
-  Shipped: `tenant-isolation` + `memberships-isolation` e2e suites cover
-  wrong-org access (403) and membership-id guessing through the attacker's own
-  org (404).
+  Shipped: `tenant-isolation`, `memberships-isolation`, and `events-isolation`
+  e2e suites cover wrong-org access (403) and id guessing through the
+  attacker's own org (404) for memberships and events.
 - SuperAdmin cross-tenant access allowed but **always** written to `AuditLog`
   with `isBreakGlass = true` and flagged for review.
 
