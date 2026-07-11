@@ -87,4 +87,53 @@ export class EventsService {
       return updated;
     });
   }
+
+  private async transition(
+    organizationId: string,
+    eventId: string,
+    action: 'event.publish' | 'event.complete' | 'event.cancel',
+    to: 'PUBLISHED' | 'COMPLETED' | 'CANCELLED',
+    canTransition: (status: string) => boolean,
+    actorUserId?: string,
+    extraGuard?: (event: { endAt: Date }) => void,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      const current = await tx.event.findFirst({ where: { id: eventId, organizationId } });
+      if (!current) throw new NotFoundException('Event not found in this organization');
+      if (!canTransition(current.status)) {
+        throw new ConflictException(`Cannot ${action} an event in ${current.status}`);
+      }
+      if (extraGuard) extraGuard(current);
+
+      const updated = await tx.event.update({ where: { id: eventId, organizationId }, data: { status: to } });
+      await this.audit.record({
+        organizationId, actorUserId, action,
+        targetType: 'Event', targetId: eventId,
+        metadata: { eventId, from: current.status, to },
+      }, tx);
+      return updated;
+    });
+  }
+
+  publish(organizationId: string, eventId: string, actorUserId?: string) {
+    return this.transition(
+      organizationId, eventId, 'event.publish', 'PUBLISHED',
+      (s) => s === 'DRAFT', actorUserId,
+      (e) => { if (e.endAt <= new Date()) throw new ConflictException('Cannot publish a past event'); },
+    );
+  }
+
+  complete(organizationId: string, eventId: string, actorUserId?: string) {
+    return this.transition(
+      organizationId, eventId, 'event.complete', 'COMPLETED',
+      (s) => s === 'PUBLISHED', actorUserId,
+    );
+  }
+
+  cancel(organizationId: string, eventId: string, actorUserId?: string) {
+    return this.transition(
+      organizationId, eventId, 'event.cancel', 'CANCELLED',
+      (s) => s === 'DRAFT' || s === 'PUBLISHED', actorUserId,
+    );
+  }
 }

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { EventsService } from './events.service';
 import { CreateEventDto } from './dto/create-event.dto';
@@ -10,7 +10,7 @@ import { Roles } from '../rbac/roles.decorator';
 import { OrgId } from '../tenancy/org-id.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { MembershipRole } from '../tenancy/membership-role.decorator';
-import { MANAGE_EVENTS } from '../rbac/role-groups';
+import { MANAGE_EVENTS, MANAGE_MEMBERS } from '../rbac/role-groups';
 
 @Controller('organizations/:orgId/events')
 export class EventsController {
@@ -49,5 +49,29 @@ export class EventsController {
     @CurrentUser() user: { userId: string },
   ) {
     return this.events.update(orgId, eventId, dto, user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
+  @Roles(...MANAGE_EVENTS)
+  @Post(':eventId/publish')
+  @HttpCode(200)
+  publish(@OrgId() orgId: string, @Param('eventId') eventId: string, @CurrentUser() user: { userId: string }) {
+    return this.events.publish(orgId, eventId, user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
+  @Roles(...MANAGE_EVENTS)
+  @Post(':eventId/complete')
+  @HttpCode(200)
+  complete(@OrgId() orgId: string, @Param('eventId') eventId: string, @CurrentUser() user: { userId: string }) {
+    return this.events.complete(orgId, eventId, user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
+  @Roles(...MANAGE_MEMBERS)
+  @Post(':eventId/cancel')
+  @HttpCode(200)
+  cancel(@OrgId() orgId: string, @Param('eventId') eventId: string, @CurrentUser() user: { userId: string }) {
+    return this.events.cancel(orgId, eventId, user.userId);
   }
 }
