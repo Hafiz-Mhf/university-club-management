@@ -102,17 +102,25 @@ creation.
 | — | `@@index([organizationId])` | tenant-scoped queries |
 | — | `@@index([eventId, status])` | capacity counts + waitlist FIFO promotion |
 
-### Attendance
+### Attendance (shipped)
 | Field | Type | Notes |
 |-------|------|-------|
 | id | uuid (PK) | |
-| registrationId | uuid (FK, unique) | one per registration |
-| eventId | uuid (FK) | |
-| organizationId | uuid (FK) | |
-| qrTokenHash | string | HMAC-signed, single-use |
-| scannedAt | timestamp, nullable | |
-| status | enum (registered, present, absent) | |
-| scannedBy | uuid (FK → User), nullable | committee scanner |
+| registrationId | uuid (FK → Registration, unique) | one per registration |
+| eventId | uuid (FK → Event) | |
+| organizationId | uuid | denormalized for scope |
+| status | enum `AttendanceStatus` (`REGISTERED, PRESENT, ABSENT`) | default `REGISTERED` |
+| scannedAt | timestamp, nullable | set when status becomes `PRESENT` |
+| scannedBy | uuid, nullable | committee/volunteer userId who scanned |
+| createdAt | timestamp | |
+| — | `@@index([organizationId])` | tenant-scoped queries |
+| — | `@@index([eventId, status])` | attendance list/counts |
+
+No `qrTokenHash` column: the QR token is stateless —
+`base64url(attendanceId + "." + HMAC-SHA256(attendanceId, ATTENDANCE_TOKEN_SECRET))`,
+verified by recomputing the HMAC. Single-use is enforced by the
+`REGISTERED → PRESENT` compare-and-swap, not by storing/rotating a token
+hash.
 
 ### Certificate
 | Field | Type | Notes |

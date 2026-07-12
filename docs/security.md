@@ -203,6 +203,42 @@ with the "never personal data in logs" rule.
 as every `Registration`, ahead of the full PDPA module (roadmap item 11),
 which will own the export/delete/anonymize endpoints described in §5 below.
 
+### As built — attendance (shipped)
+
+New role group: `MANAGE_ATTENDANCE = [...MANAGE_EVENTS, 'VOLUNTEER']` — the
+first feature to grant the `VOLUNTEER` role any capability, matching the
+Permission Matrix's "Scan QR / mark attendance" row above.
+
+| Route | Tier | Notes |
+|---|---|---|
+| `GET /attendance/me` | any org member (TenantGuard only) | caller's own attendance record + a fresh signed token |
+| `GET /attendance` | MANAGE_ATTENDANCE | full list for the event |
+| `POST /attendance/scan` `{ token }` | MANAGE_ATTENDANCE | verifies the token, CAS `REGISTERED → PRESENT` |
+| `POST /attendance/:attendanceId/absent` | MANAGE_ATTENDANCE | CAS `REGISTERED → ABSENT`; 409 if already `PRESENT` |
+
+**Stateless QR token:** no `qrTokenHash` column and no per-row secret — the
+token is `attendanceId + "." + HMAC-SHA256(attendanceId, ATTENDANCE_TOKEN_SECRET)`,
+a dedicated env-var secret independent of the JWT signing secrets. Verification
+recomputes the HMAC and compares with a timing-safe equality check; a
+malformed or tampered token is a `400`, never a `500` or a leak of whether
+the id exists. Single-use is enforced purely by the status CAS: the first
+scan flips `REGISTERED → PRESENT`; any further scan hits `P2025` on the CAS
+and returns `409`, the same idiom used throughout events/registrations.
+
+**Lifecycle tied to Registration, not a separate trigger:** `Attendance`
+rows are created and deleted **inside `RegistrationsService`'s own
+transactions** — created when a registration becomes `APPROVED` (direct
+approve or waitlist promotion), deleted when a registration resolves to
+`CANCELLED` or `REJECTED`. A cancelled or rejected participant's QR stops
+verifying immediately (`404` on scan — the row is gone), without a separate
+cleanup job.
+
+**Audit actions:** `attendance.scan` / `attendance.absent`
+`{attendanceId, eventId}` — metadata is ids/enum values only. The raw token
+is never logged. Attendance row creation/deletion is not separately audited
+— it's a system side effect already covered by `registration.create` /
+`registration.promote` / `registration.cancel` / `registration.reject`.
+
 ---
 
 ## 3. Multi-Tenant Isolation
