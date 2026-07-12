@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, ForbiddenException, Injectable,
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { AttendanceService } from '../attendance/attendance.service';
 import { RegisterDto } from './dto/register.dto';
 
 const CURRENT_POLICY_VERSION = 'v1';
@@ -13,6 +14,7 @@ export class RegistrationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly attendance: AttendanceService,
   ) {}
 
   async register(
@@ -85,6 +87,12 @@ export class RegistrationsService {
             consentRecordId: consentRecord.id,
           },
         });
+
+        if (status === 'APPROVED') {
+          await this.attendance.createForRegistration(tx, {
+            registrationId: registration.id, eventId, organizationId,
+          });
+        }
 
         await this.audit.record({
           organizationId, actorUserId: userId, action: 'registration.create',
@@ -177,6 +185,8 @@ export class RegistrationsService {
           data: { status: terminalStatus },
         });
 
+        await this.attendance.deleteForRegistration(tx, registrationId, organizationId);
+
         await this.audit.record({
           organizationId, actorUserId, action,
           targetType: 'Registration', targetId: registrationId,
@@ -205,6 +215,9 @@ export class RegistrationsService {
               data: { status: 'APPROVED' },
             });
             if (count === 1) {
+              await this.attendance.createForRegistration(tx, {
+                registrationId: candidate.id, eventId: current.eventId, organizationId,
+              });
               await this.audit.record({
                 organizationId, actorUserId, action: 'registration.promote',
                 targetType: 'Registration', targetId: candidate.id,
