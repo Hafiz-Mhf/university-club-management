@@ -27,6 +27,13 @@ describe('AttendanceTokenService', () => {
     expect(service.verify(tampered)).toBeNull();
   });
 
+  it('rejects a token whose signature has the wrong length (guard before timingSafeEqual)', () => {
+    const token = service.sign('11111111-1111-1111-1111-111111111111');
+    const [id, sig] = token.split('.');
+    expect(service.verify(`${id}.${sig}extra`)).toBeNull();
+    expect(service.verify(`${id}.abc`)).toBeNull();
+  });
+
   it('rejects a token with a tampered id (signature no longer matches)', () => {
     const token = service.sign('11111111-1111-1111-1111-111111111111');
     const [, sig] = token.split('.');
