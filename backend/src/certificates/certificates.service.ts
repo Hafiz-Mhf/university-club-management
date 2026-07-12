@@ -89,4 +89,26 @@ export class CertificatesService {
       throw error;
     }
   }
+
+  list(organizationId: string, eventId: string) {
+    return this.prisma.certificate.findMany({
+      where: { eventId, organizationId },
+      select: { id: true, userId: true, fileSizeBytes: true, createdAt: true },
+      orderBy: { createdAt: 'asc' },
+    });
+  }
+
+  async findMine(organizationId: string, eventId: string, userId: string) {
+    const certificate = await this.prisma.certificate.findFirst({ where: { eventId, organizationId, userId } });
+    if (!certificate) throw new NotFoundException('No certificate found');
+    const downloadUrl = await this.storage.getSignedDownloadUrl(certificate.storageKey, SIGNED_URL_TTL_SECONDS);
+    return { ...certificate, downloadUrl };
+  }
+
+  async download(organizationId: string, eventId: string, certificateId: string) {
+    const certificate = await this.prisma.certificate.findFirst({ where: { id: certificateId, organizationId, eventId } });
+    if (!certificate) throw new NotFoundException('Certificate not found in this event');
+    const downloadUrl = await this.storage.getSignedDownloadUrl(certificate.storageKey, SIGNED_URL_TTL_SECONDS);
+    return { ...certificate, downloadUrl };
+  }
 }

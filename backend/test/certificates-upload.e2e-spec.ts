@@ -148,20 +148,32 @@ describe('Certificate upload (e2e)', () => {
     await prisma.organization.update({ where: { id: orgId }, data: { storageQuotaMb: 1024 } });
   });
 
-  it('409 on a duplicate upload for the same person/event', async () => {
+  it('409 on a duplicate upload for the same person/event, and the original file survives intact', async () => {
     const { userId } = await presentParticipant();
+    const firstBytes = Buffer.from('%PDF-1.4\n%first upload bytes\n');
     await request(app.getHttpServer())
       .post(`/organizations/${orgId}/events/${eventId}/certificates`)
       .set('Authorization', `Bearer ${presToken}`)
       .field('userId', userId)
-      .attach('file', pdfBytes(), { filename: 'first.pdf', contentType: 'application/pdf' })
+      .attach('file', firstBytes, { filename: 'first.pdf', contentType: 'application/pdf' })
       .expect(201);
 
     await request(app.getHttpServer())
       .post(`/organizations/${orgId}/events/${eventId}/certificates`)
       .set('Authorization', `Bearer ${presToken}`)
       .field('userId', userId)
-      .attach('file', pdfBytes(), { filename: 'second.pdf', contentType: 'application/pdf' })
+      .attach('file', Buffer.from('%PDF-1.4\n%second upload bytes\n'), { filename: 'second.pdf', contentType: 'application/pdf' })
       .expect(409);
+
+    const list = await request(app.getHttpServer())
+      .get(`/organizations/${orgId}/events/${eventId}/certificates`)
+      .set('Authorization', `Bearer ${presToken}`).expect(200);
+    const certId = list.body.find((c: { userId: string }) => c.userId === userId).id;
+    const downloadRes = await request(app.getHttpServer())
+      .get(`/organizations/${orgId}/events/${eventId}/certificates/${certId}/download`)
+      .set('Authorization', `Bearer ${presToken}`).expect(200);
+    const fetched = await fetch(downloadRes.body.downloadUrl);
+    const fetchedBytes = Buffer.from(await fetched.arrayBuffer());
+    expect(fetchedBytes.equals(firstBytes)).toBe(true);
   });
 });
