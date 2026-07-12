@@ -84,16 +84,31 @@ and form management already work).
 3. Target user has an `Attendance` row with `status: 'PRESENT'` for this
    event (org-scoped, joined through `Registration.userId` — same join
    pattern `AttendanceService.findMine` already uses) — `400` if not.
-4. Fetch `Organization.storageQuotaMb`; compare against a live
+4. Pre-check: `Certificate.findFirst({ eventId, organizationId, userId })`
+   — `409` immediately if one already exists. **Must run before storage is
+   touched.** The storage key is deterministic
+   (`certificates/{organizationId}/{eventId}/{userId}.pdf`), shared across
+   every upload attempt for the same person/event — it is not per-attempt.
+   A duplicate `putObject` silently overwrites the first (already
+   successful) certificate's file. Rejecting duplicates before any write
+   is the only safe option: cleaning up "the just-uploaded object" on a
+   later `P2002` would delete the *shared* key, destroying the original,
+   still-DB-referenced certificate instead of the rejected attempt's own
+   bytes. This pre-check closes the realistic case (sequential or
+   accidental double-submit); a true sub-millisecond concurrent race is an
+   accepted residual risk, matching this codebase's existing tolerance for
+   narrow TOCTOU windows elsewhere (e.g. the membership-upsert race in
+   `RegistrationsService.register()`).
+5. Fetch `Organization.storageQuotaMb`; compare against a live
    `SUM(fileSizeBytes)` for the org (`certificate.aggregate`) plus the new
    file's size — `400` if it would exceed quota. No running counter column;
    certificate volumes are small (one row per person per event) so a
    per-org `SUM` is cheap and never drifts.
-5. `StorageService.putObject` to the deterministic key.
-6. `Certificate.create`. If this throws `P2002` (a concurrent upload for
-   the same person/event won the race), the just-uploaded MinIO object is
-   deleted (best-effort cleanup) before returning `409` — a rejected
-   upload never leaves an orphaned file.
+6. `StorageService.putObject` to the deterministic key.
+7. `Certificate.create`. If this still throws `P2002` (the narrow
+   concurrent race the step-4 pre-check doesn't fully close), return `409`
+   directly — do **not** delete the storage object; on a shared key, a
+   losing request can't tell its own bytes apart from the winner's.
 
 ## Download mechanics
 
@@ -133,8 +148,10 @@ codebase's real-Postgres-not-mocked-Prisma testing philosophy):
 - Rejects a target user without `PRESENT` attendance → `400`.
 - Rejects when org quota would be exceeded (test org with a tiny quota) →
   `400`.
-- Duplicate upload for the same person/event → `409`; the orphaned MinIO
-  object from the losing attempt is verified gone.
+- Duplicate upload for the same person/event → `409`; the original
+  certificate's `downloadUrl` still round-trips its original bytes
+  afterward (proves the shared storage key was never touched by the
+  rejected attempt).
 - `GET /me` happy path → `200` + a working `downloadUrl` (test fetches the
   URL and compares bytes to the uploaded buffer — proves the whole storage
   round-trip, not just that a string came back).
