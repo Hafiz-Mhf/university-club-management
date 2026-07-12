@@ -38,4 +38,17 @@ export class AttendanceController {
   ) {
     return this.attendance.scan(orgId, eventId, dto.token, user.userId);
   }
+
+  @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
+  @Roles(...MANAGE_ATTENDANCE)
+  @Post(':attendanceId/absent')
+  @HttpCode(200)
+  markAbsent(
+    @OrgId() orgId: string,
+    @Param('eventId') eventId: string,
+    @Param('attendanceId') attendanceId: string,
+    @CurrentUser() user: { userId: string },
+  ) {
+    return this.attendance.markAbsent(orgId, eventId, attendanceId, user.userId);
+  }
 }

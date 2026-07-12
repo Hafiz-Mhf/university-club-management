@@ -49,6 +49,10 @@ export class AttendanceService {
     return this.resolve(organizationId, eventId, attendanceId, actorUserId, 'PRESENT', 'attendance.scan');
   }
 
+  async markAbsent(organizationId: string, eventId: string, attendanceId: string, actorUserId: string) {
+    return this.resolve(organizationId, eventId, attendanceId, actorUserId, 'ABSENT', 'attendance.absent');
+  }
+
   // Single-row CAS, same idiom as RegistrationsService's private resolve():
   // no multi-candidate race exists here (unlike waitlist promotion), so a
   // plain update() + P2025 catch is correct.
