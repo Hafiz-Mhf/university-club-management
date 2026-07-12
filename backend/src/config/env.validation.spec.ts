@@ -5,6 +5,7 @@ describe('envValidationSchema', () => {
     DATABASE_URL: 'postgresql://u:p@localhost:5432/db',
     JWT_ACCESS_SECRET: 'a'.repeat(16),
     JWT_REFRESH_SECRET: 'b'.repeat(16),
+    ATTENDANCE_TOKEN_SECRET: 'c'.repeat(16),
   };
 
   it('accepts a valid env and applies defaults', () => {
@@ -18,6 +19,14 @@ describe('envValidationSchema', () => {
     const { error } = envValidationSchema.validate({
       ...valid,
       JWT_ACCESS_SECRET: undefined,
+    });
+    expect(error).toBeDefined();
+  });
+
+  it('rejects a missing ATTENDANCE_TOKEN_SECRET', () => {
+    const { error } = envValidationSchema.validate({
+      ...valid,
+      ATTENDANCE_TOKEN_SECRET: undefined,
     });
     expect(error).toBeDefined();
   });

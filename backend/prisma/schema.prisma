@@ -46,6 +46,12 @@ enum FormFieldType {
   CHECKBOX
 }
 
+enum AttendanceStatus {
+  REGISTERED
+  PRESENT
+  ABSENT
+}
+
 model User {
   id           String       @id @default(uuid())
   email        String       @unique
@@ -125,6 +131,7 @@ model Event {
   organization    Organization @relation(fields: [organizationId], references: [id])
   registrationForm RegistrationForm?
   registrations    Registration[]
+  attendances      Attendance[]
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
@@ -164,10 +171,27 @@ model Registration {
   event           Event              @relation(fields: [eventId], references: [id])
   user            User               @relation(fields: [userId], references: [id])
   consentRecord   ConsentRecord      @relation(fields: [consentRecordId], references: [id])
+  attendance      Attendance?
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
 
   @@unique([eventId, userId])
+  @@index([organizationId])
+  @@index([eventId, status])
+}
+
+model Attendance {
+  id             String           @id @default(uuid())
+  registrationId String           @unique
+  registration   Registration     @relation(fields: [registrationId], references: [id])
+  eventId        String
+  event          Event            @relation(fields: [eventId], references: [id])
+  organizationId String
+  status         AttendanceStatus @default(REGISTERED)
+  scannedAt      DateTime?
+  scannedBy      String?
+  createdAt      DateTime         @default(now())
+
   @@index([organizationId])
   @@index([eventId, status])
 }
