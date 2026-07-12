@@ -60,18 +60,24 @@ export class CertificatesService {
     await this.storage.putObject(storageKey, file.buffer, ALLOWED_MIME);
 
     try {
-      const certificate = await this.prisma.certificate.create({
-        data: {
-          eventId, organizationId, userId: targetUserId,
-          storageKey, fileSizeBytes: file.size, uploadedByUserId: actorUserId,
-        },
+      // Create + audit are atomic, matching every other mutating service.
+      // If the audit insert fails and rolls back the create, the storage
+      // object is left at the deterministic key with no DB row — that is
+      // self-healing: a retry passes the pre-check and overwrites it.
+      return await this.prisma.$transaction(async (tx) => {
+        const certificate = await tx.certificate.create({
+          data: {
+            eventId, organizationId, userId: targetUserId,
+            storageKey, fileSizeBytes: file.size, uploadedByUserId: actorUserId,
+          },
+        });
+        await this.audit.record({
+          organizationId, actorUserId, action: 'certificate.upload',
+          targetType: 'Certificate', targetId: certificate.id,
+          metadata: { certificateId: certificate.id, eventId, userId: targetUserId },
+        }, tx);
+        return certificate;
       });
-      await this.audit.record({
-        organizationId, actorUserId, action: 'certificate.upload',
-        targetType: 'Certificate', targetId: certificate.id,
-        metadata: { certificateId: certificate.id, eventId, userId: targetUserId },
-      });
-      return certificate;
     } catch (error) {
       // Narrow residual race the pre-check above doesn't fully close (two
       // uploads for the same event+user landing within the same instant).
