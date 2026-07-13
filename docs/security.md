@@ -300,6 +300,54 @@ P2025 → 404 and rolls back its own audit write with the transaction.
 `{certificateId, eventId, userId}` — ids only. No file content, and no PII
 beyond the existing userId-in-audit pattern used everywhere else.
 
+### As built — dashboard (shipped)
+
+No new role group: `MANAGE_EVENTS` is reused (same tier as certificates
+list/upload/download/delete, registration list/reject, form management) —
+pending approvals and org-wide activity are committee-facing data, so there
+is no participant-facing variant of this endpoint.
+
+| Route | Tier | Notes |
+|---|---|---|
+| `GET /organizations/:orgId/dashboard` | MANAGE_EVENTS | single aggregate endpoint returning all widgets in one payload |
+
+Guard chain: `JwtAuthGuard → TenantGuard → RolesGuard`.
+
+**KPI definitions** (`DashboardService.getSummary`, all `organizationId`-scoped
+`count` queries):
+
+- `activeMembers` — `Membership.count({ status: 'ACTIVE' })`.
+- `totalEvents` — `Event.count({ status: { in: ['PUBLISHED', 'COMPLETED'] } })`
+  — excludes `DRAFT`/`CANCELLED`.
+- `activeRegistrations` — `Registration.count({ status: { in: ['APPROVED', 'WAITLISTED'] } })`
+  — excludes `CANCELLED`/`REJECTED`.
+- `certificatesIssued` — `Certificate.count({})`.
+
+**"Pending approvals" maps to `WAITLISTED`, not a new gate:** the
+`pendingApprovals` widget lists `Registration` rows with `status:
+'WAITLISTED'`, ordered `createdAt asc` — the only registration state
+actually awaiting committee action today (a committee member can `reject` a
+waitlisted row to free a spot, or it auto-promotes when someone ahead
+resolves). `RegistrationStatus.PENDING` remains unused elsewhere in the
+codebase; this endpoint does not introduce a new approval state or gate.
+
+**Fixed top-N widgets, no pagination (explicit scope decision):**
+`upcomingEvents` (5), `pendingApprovals` (10), `recentRegistrations` (10),
+`activityFeed` (15) are capped, ordered lists with no pagination — a
+deliberate scope decision for a "Basic Dashboard" glance view, not an
+oversight. A full paginated activity log is a separate, not-yet-built
+roadmap item (Phase 1 item 10, Audit Logs).
+
+**Field-selection discipline:** every widget query uses an explicit Prisma
+`select` — never a raw spread of the full row — the same convention adopted
+in the certificates fix above. `Registration` rows in particular carry
+`answers` (participant's custom-form responses) and `consentRecordId`,
+neither of which is selected.
+
+**Audit:** none. This is a read-only aggregate endpoint; viewing the
+dashboard is not logged, matching the existing precedent that `GET
+/certificates` list is also unaudited.
+
 ---
 
 ## 3. Multi-Tenant Isolation
