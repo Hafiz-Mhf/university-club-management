@@ -111,4 +111,26 @@ export class CertificatesService {
     const downloadUrl = await this.storage.getSignedDownloadUrl(certificate.storageKey, SIGNED_URL_TTL_SECONDS);
     return { ...certificate, downloadUrl };
   }
+
+  async remove(organizationId: string, eventId: string, certificateId: string, actorUserId: string) {
+    const certificate = await this.prisma.certificate.findFirst({ where: { id: certificateId, organizationId, eventId } });
+    if (!certificate) throw new NotFoundException('Certificate not found in this event');
+
+    await this.storage.deleteObject(certificate.storageKey);
+    try {
+      await this.prisma.certificate.delete({ where: { id: certificateId, organizationId } });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+        throw new NotFoundException('Certificate not found in this event');
+      }
+      throw error;
+    }
+
+    await this.audit.record({
+      organizationId, actorUserId, action: 'certificate.delete',
+      targetType: 'Certificate', targetId: certificateId,
+      metadata: { certificateId, eventId, userId: certificate.userId },
+    });
+    return { removed: true as const };
+  }
 }

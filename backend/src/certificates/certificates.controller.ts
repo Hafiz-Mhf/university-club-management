@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { CertificatesService } from './certificates.service';
 import { UploadCertificateDto } from './dto/upload-certificate.dto';
@@ -50,5 +50,17 @@ export class CertificatesController {
     @Param('certificateId') certificateId: string,
   ) {
     return this.certificates.download(orgId, eventId, certificateId);
+  }
+
+  @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
+  @Roles(...MANAGE_EVENTS)
+  @Delete(':certificateId')
+  remove(
+    @OrgId() orgId: string,
+    @Param('eventId') eventId: string,
+    @Param('certificateId') certificateId: string,
+    @CurrentUser() user: { userId: string },
+  ) {
+    return this.certificates.remove(orgId, eventId, certificateId, user.userId);
   }
 }
