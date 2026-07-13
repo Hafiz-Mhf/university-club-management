@@ -69,7 +69,7 @@ naturally overwrites the same MinIO key.
 | `GET /organizations/:orgId/events/:eventId/certificates` | `MANAGE_EVENTS` | List metadata for the event (id, userId, fileSizeBytes, createdAt) — no signed URLs |
 | `GET /organizations/:orgId/events/:eventId/certificates/me` | `TenantGuard` only (any org member) | Caller's own certificate + a fresh 5-min signed download URL; `404` if none |
 | `GET /organizations/:orgId/events/:eventId/certificates/:certificateId/download` | `MANAGE_EVENTS` | Fresh signed URL for any certificate in the event (committee verification) |
-| `DELETE /organizations/:orgId/events/:eventId/certificates/:certificateId` | `MANAGE_EVENTS` | Deletes the MinIO object first, then the DB row |
+| `DELETE /organizations/:orgId/events/:eventId/certificates/:certificateId` | `MANAGE_EVENTS` | Deletes the DB row + audit atomically first, then the MinIO object. A storage-delete failure leaves an orphaned object at the deterministic key, which self-heals on re-upload; the reverse order would leave a dangling DB row that blocks re-upload with no self-heal |
 
 No new role group — reuses `MANAGE_EVENTS` (matches how registration list/reject
 and form management already work).
