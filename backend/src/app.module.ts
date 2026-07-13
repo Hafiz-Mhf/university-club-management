@@ -9,6 +9,7 @@ import { EventsModule } from './events/events.module';
 import { RegistrationsModule } from './registrations/registrations.module';
 import { AttendanceModule } from './attendance/attendance.module';
 import { CertificatesModule } from './certificates/certificates.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 import { envValidationSchema } from './config/env.validation';
 
 @Module({
@@ -23,6 +24,7 @@ import { envValidationSchema } from './config/env.validation';
     RegistrationsModule,
     AttendanceModule,
     CertificatesModule,
+    DashboardModule,
   ],
 })
 export class AppModule {}
