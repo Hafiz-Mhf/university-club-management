@@ -122,16 +122,29 @@ verified by recomputing the HMAC. Single-use is enforced by the
 `REGISTERED → PRESENT` compare-and-swap, not by storing/rotating a token
 hash.
 
-### Certificate
+### Certificate (shipped)
 | Field | Type | Notes |
 |-------|------|-------|
 | id | uuid (PK) | |
-| eventId | uuid (FK) | |
-| organizationId | uuid (FK) | |
-| userId | uuid (FK → User) | owner |
-| storageKey | string | **private** bucket key |
-| uploadedBy | uuid (FK → User) | committee |
+| eventId | uuid (FK → Event) | |
+| organizationId | uuid | denormalized for scope |
+| userId | uuid (FK → User) | certificate owner (the participant) |
+| storageKey | string | deterministic **private** bucket key — `certificates/{organizationId}/{eventId}/{userId}.pdf` |
+| fileSizeBytes | int | size of the uploaded PDF; summed live for per-org quota (no running-counter column) |
+| uploadedByUserId | uuid | committee member who uploaded (plain column, no FK relation) |
 | createdAt | timestamp | |
+| — | `@@unique([eventId, userId])` | one certificate per person per event this phase |
+| — | `@@index([organizationId])` | tenant-scoped queries |
+
+`Certificate` is in `TENANT_SCOPED_MODELS` (same as Registration/Attendance),
+so the Prisma tenant-scope middleware asserts every filtering read is
+org-scoped. The `storageKey` is deterministic and shared across every upload
+attempt for the same event+user — no title/type field and no multiple
+certificates per event, so a delete-then-reupload overwrites the same MinIO
+key. Per-org storage quota is enforced with a live
+`SUM(fileSizeBytes)` aggregate (`certificate.aggregate`) at upload time rather
+than a running counter on `Organization`; certificate volumes are small (one
+row per person per event) so the aggregate is cheap and never drifts.
 
 ### ConsentRecord (PDPA) (shipped)
 | Field | Type | Notes |
