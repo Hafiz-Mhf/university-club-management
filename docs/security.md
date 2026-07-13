@@ -361,8 +361,8 @@ Guard chain: `JwtAuthGuard → TenantGuard → RolesGuard`.
 
 **Query parameters and defaults** (`AuditService.list`):
 
-- `page` (default `1`) — offset-based pagination; clamped to minimum 1.
-- `pageSize` (default `25`) — clamped to maximum 100.
+- `page` (default `1`) — offset-based pagination; clamped to [1, ∞).
+- `pageSize` (default `25`) — clamped to [1, 100].
 - `action` (optional) — filter by audit action name (e.g., `member.add`, `event.create`, etc.).
 - `actorUserId` (optional) — filter by the actor's user ID.
 - `from` (optional) — ISO 8601 date-time; filters `createdAt ≥ from` (400 if invalid).
@@ -376,13 +376,23 @@ Guard chain: `JwtAuthGuard → TenantGuard → RolesGuard`.
   convention (never personal data, only enum values and identifiers).
 - `isBreakGlass` — schema-ready but always `false` today; reserved for the
   future `SuperAdmin` cross-tenant break-glass feature not yet implemented.
+- **Excluded:** `ipAddress` and `userAgent` (dead schema columns, never
+  populated by `AuditService.record()`, following the "never log personal data"
+  rule).
+
+Results are ordered by `createdAt DESC` (newest first).
+
+**Audit:** none. This is a read-only query endpoint; viewing the audit log is
+not itself logged, matching the existing precedent that the dashboard list is
+also unaudited.
 
 **Explicit deferral:** break-glass alerting and the `SuperAdmin` cross-tenant
 access feature remain planned (Phase 2/3). Today, all logs are org-scoped and
 `isBreakGlass` remains unused, consistent with the `User.mfaSecret` posture
 for MFA (schema-ready, deferred until the MFA feature ships).
 
-**Audit actions captured:** `member.add`, `member.status.change`,
+**Audit actions captured:** `organization.profile.update`,
+`organization.settings.update`, `member.add`, `member.status.change`,
 `member.role.change`, `member.remove`, `event.create`, `event.update`,
 `event.publish`, `event.complete`, `event.cancel`, `event.delete`,
 `registration.create`, `registration.cancel`, `registration.reject`,
