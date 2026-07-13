@@ -239,6 +239,67 @@ is never logged. Attendance row creation/deletion is not separately audited
 — it's a system side effect already covered by `registration.create` /
 `registration.promote` / `registration.cancel` / `registration.reject`.
 
+### As built — certificates (shipped)
+
+No new role group: `MANAGE_EVENTS` is reused for all committee-side
+certificate operations (matches how registration list/reject and form
+management already work).
+
+| Route | Tier | Notes |
+|---|---|---|
+| `POST /certificates` (multipart `file` + body `userId`) | MANAGE_EVENTS | committee uploads on behalf of a specific participant |
+| `GET /certificates` | MANAGE_EVENTS | list metadata for the event (id, userId, fileSizeBytes, createdAt) — no signed URLs |
+| `GET /certificates/me` | any org member (TenantGuard only) | caller's own certificate + a fresh 5-min signed download URL; 404 if none |
+| `GET /certificates/:certificateId/download` | MANAGE_EVENTS | fresh signed URL for any certificate in the event (committee verification) |
+| `DELETE /certificates/:certificateId` | MANAGE_EVENTS | deletes the DB row + audit atomically, then the storage object |
+
+Routes rooted at `/organizations/:orgId/events/:eventId/certificates`. Guard
+chain on the gated routes: `JwtAuthGuard → TenantGuard → RolesGuard`; `/me`
+drops `RolesGuard` (any authenticated org member reads their own certificate).
+
+**Upload validation order** (`CertificatesService.upload`, fail-fast):
+
+1. Org-scoped `Event` lookup — 404 if wrong org/event (no existence leak).
+2. MIME must be `application/pdf`, size ≤ 5MB — checked in the service so the
+   rejection is a clean 400. Multer's `FileInterceptor` limit sits higher
+   (10MB) purely as an abuse ceiling.
+3. Target user must have a `PRESENT` `Attendance` row for this event
+   (org-scoped, joined through `Registration.userId`) — 400 if not.
+4. **Duplicate pre-check before any storage write:**
+   `certificate.findFirst({ eventId, organizationId, userId })` → 409
+   immediately if one exists. The storage key is deterministic and *shared*
+   across every upload attempt for the same person/event, so this must run
+   before `putObject` — cleaning up "the just-uploaded object" on a later
+   P2002 would delete the shared key and destroy the original, still-referenced
+   certificate.
+5. Live `SUM(fileSizeBytes)` for the org (`certificate.aggregate`) + the new
+   file's size vs `Organization.storageQuotaMb` — 400 if it would exceed quota.
+6. `StorageService.putObject` to the deterministic key.
+7. `Certificate.create` + `certificate.upload` audit in one transaction. A
+   residual P2002 (the narrow concurrent race the step-4 pre-check doesn't
+   fully close) → 409; the storage object is **never** deleted on this path
+   (on a shared key a losing request can't tell its own bytes from the
+   winner's).
+
+**Private storage / signed URLs:** single private S3-compatible bucket (MinIO
+in dev), no public read. Both download routes call
+`StorageService.getSignedDownloadUrl(storageKey, 300)` — a 5-minute-TTL signed
+URL generated fresh per request and **never stored**. `/me` is
+org+event+userId scoped (404 if none); the committee download route is
+org+event scoped (404 if wrong org/event).
+
+**Delete ordering (as shipped):** the DB row and the `certificate.delete`
+audit row are deleted **atomically in a transaction first**, then the storage
+object. A storage-delete failure leaves only an orphaned object at the
+deterministic key, which self-heals on re-upload (upload overwrites the same
+key). The reverse order (storage first) could leave a dangling DB row that
+blocks re-upload with no self-heal. A lost concurrent double-delete surfaces as
+P2025 → 404 and rolls back its own audit write with the transaction.
+
+**Audit actions:** `certificate.upload` / `certificate.delete`
+`{certificateId, eventId, userId}` — ids only. No file content, and no PII
+beyond the existing userId-in-audit pattern used everywhere else.
+
 ---
 
 ## 3. Multi-Tenant Isolation
