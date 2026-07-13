@@ -116,21 +116,29 @@ export class CertificatesService {
     const certificate = await this.prisma.certificate.findFirst({ where: { id: certificateId, organizationId, eventId } });
     if (!certificate) throw new NotFoundException('Certificate not found in this event');
 
-    await this.storage.deleteObject(certificate.storageKey);
+    // DB-first ordering: if the storage delete below fails, we only leave an
+    // orphaned object at the deterministic key, which self-heals on re-upload
+    // (upload overwrites the same key). The reverse order (storage first)
+    // could leave a dangling DB row that blocks re-upload with no self-heal.
     try {
-      await this.prisma.certificate.delete({ where: { id: certificateId, organizationId } });
+      await this.prisma.$transaction(async (tx) => {
+        await tx.certificate.delete({ where: { id: certificateId, organizationId } });
+        await this.audit.record({
+          organizationId, actorUserId, action: 'certificate.delete',
+          targetType: 'Certificate', targetId: certificateId,
+          metadata: { certificateId, eventId, userId: certificate.userId },
+        }, tx);
+      });
     } catch (error) {
+      // A lost concurrent double-delete (P2025) rolls back its own audit
+      // write with the transaction — no audit row for a delete that didn't happen.
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
         throw new NotFoundException('Certificate not found in this event');
       }
       throw error;
     }
 
-    await this.audit.record({
-      organizationId, actorUserId, action: 'certificate.delete',
-      targetType: 'Certificate', targetId: certificateId,
-      metadata: { certificateId, eventId, userId: certificate.userId },
-    });
+    await this.storage.deleteObject(certificate.storageKey);
     return { removed: true as const };
   }
 }
