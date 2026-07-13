@@ -49,7 +49,7 @@ Secretary / Treasurer / EventDirector > Committee > Volunteer > Participant
 | View org analytics/dashboard | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ |
 | Register for events | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Download own certificate | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| View audit log | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| View audit log | ✅ | ✅ | ✅ | ❌ | ❌ | ❌ |
 
 `Advisor` = read-only oversight across the org. `SuperAdmin`/`UniversityAdmin`
 = platform admin (cross-tenant, break-glass logged).
@@ -347,6 +347,57 @@ neither of which is selected.
 **Audit:** none. This is a read-only aggregate endpoint; viewing the
 dashboard is not logged, matching the existing precedent that `GET
 /certificates` list is also unaudited.
+
+### As built — audit logs (shipped)
+
+No new role group: `MANAGE_MEMBERS` is reused (same tier as member management
+— President, VP, Secretary, Treasurer, Event Director).
+
+| Route | Tier | Notes |
+|---|---|---|
+| `GET /organizations/:orgId/audit-logs` | MANAGE_MEMBERS | single read-only query endpoint with filtering and offset pagination |
+
+Guard chain: `JwtAuthGuard → TenantGuard → RolesGuard`.
+
+**Query parameters and defaults** (`AuditService.list`):
+
+- `page` (default `1`) — offset-based pagination; clamped to [1, ∞).
+- `pageSize` (default `25`) — clamped to [1, 100].
+- `action` (optional) — filter by audit action name (e.g., `member.add`, `event.create`, etc.).
+- `actorUserId` (optional) — filter by the actor's user ID.
+- `from` (optional) — ISO 8601 date-time; filters `createdAt ≥ from` (400 if invalid).
+- `to` (optional) — ISO 8601 date-time; filters `createdAt ≤ to` (400 if invalid).
+
+**Response structure:** returns `{ data: AuditLog[], total: number, page: number, pageSize: number }`, where every log entry includes:
+- `id`, `organizationId`, `actorUserId`, `action`, `targetType`, `targetId`, `createdAt`.
+- **`metadata` is always included** in this response — unlike the dashboard's
+  activity feed which excludes it — since this is the dedicated log viewer and
+  every audited action in the codebase already follows the "ids-only" metadata
+  convention (never personal data, only enum values and identifiers).
+- `isBreakGlass` — schema-ready but always `false` today; reserved for the
+  future `SuperAdmin` cross-tenant break-glass feature not yet implemented.
+- **Excluded:** `ipAddress` and `userAgent` (dead schema columns, never
+  populated by `AuditService.record()`, following the "never log personal data"
+  rule).
+
+Results are ordered by `createdAt DESC` (newest first).
+
+**Audit:** none. This is a read-only query endpoint; viewing the audit log is
+not itself logged, matching the existing precedent that the dashboard list is
+also unaudited.
+
+**Explicit deferral:** break-glass alerting and the `SuperAdmin` cross-tenant
+access feature remain planned (Phase 2/3). Today, all logs are org-scoped and
+`isBreakGlass` remains unused, consistent with the `User.mfaSecret` posture
+for MFA (schema-ready, deferred until the MFA feature ships).
+
+**Audit actions captured:** `organization.profile.update`,
+`organization.settings.update`, `member.add`, `member.status.change`,
+`member.role.change`, `member.remove`, `event.create`, `event.update`,
+`event.publish`, `event.complete`, `event.cancel`, `event.delete`,
+`registration.create`, `registration.cancel`, `registration.reject`,
+`registration.promote`, `form.upsert`, `form.delete`, `attendance.scan`,
+`attendance.absent`, `certificate.upload`, `certificate.delete`.
 
 ---
 
