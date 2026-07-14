@@ -397,7 +397,37 @@ for MFA (schema-ready, deferred until the MFA feature ships).
 `event.publish`, `event.complete`, `event.cancel`, `event.delete`,
 `registration.create`, `registration.cancel`, `registration.reject`,
 `registration.promote`, `form.upsert`, `form.delete`, `attendance.scan`,
-`attendance.absent`, `certificate.upload`, `certificate.delete`.
+`attendance.absent`, `certificate.upload`, `certificate.delete`, `pdpa.export`,
+`pdpa.delete`.
+
+### As built — PDPA (shipped)
+
+**Signup consent capture:** Every user must explicitly grant consent (`RegisterDto.consent @Equals(true)`) at signup — missing or `false` → 400. The consent is recorded atomically in the same transaction as user creation: a `ConsentRecord { purpose: 'account', policyVersion: CURRENT_POLICY_VERSION, grantedAt, ipAddress }` is written via nested create. The policy version is single-sourced in `backend/src/pdpa/policy-version.ts` (currently `'v1'`) and reused for all consent types (account + event-registration).
+
+**User-level PDPA routes (first cross-org routes):** Three routes rooted at `@Controller('me')` with `JwtAuthGuard` only — no `TenantGuard` or `RolesGuard`, intentionally positioning these as user-level, cross-org operations:
+
+- `GET /me/consents` — list the user's ConsentRecords (purpose, policyVersion, grantedAt; `ipAddress` excluded from response).
+- `GET /me/export` — retrieve all personal data via a single `user.findUnique` include tree (User is not tenant-scoped; the per-model middleware assertions don't fire on nested includes).
+- `DELETE /me` — anonymize and soft-delete the account.
+
+**Export:** returns all sections: profile (id, email, fullName, createdAt), memberships (incl. organization names), registrations (incl. event titles, organization names, and answers), attendance records, consents (excl. ipAddress), and certificates with 300-second signed download URLs. Audited as a single `pdpa.export` action (targetType `User`, `organizationId: null`) — the latter is deliberate: export is a user-level operation crossing orgs, so the audit query uses `{ organizationId: null }` and is visible only to examining `actorUserId` + `action`.
+
+**Deletion (anonymization transaction):** atomic three-stage process:
+
+1. **Sole-president guard:** if the user is an ACTIVE PRESIDENT in any org with no other ACTIVE PRESIDENT, the delete fails 409 with "Transfer presidency in [org names]…" — ensures no org is left headless.
+2. **Anonymize transaction (compare-and-swap via `deletedAt: null` condition):** a single `$transaction` atomically:
+   - User: email → `deleted-<uuid>@anonymized.invalid`, fullName → 'Deleted User', passwordHash → random argon2 hash, mfaSecret → null, deletedAt → now.
+   - Memberships: studentId, faculty, programme, intake, phone nulled; committeeHistory → `DbNull`; row, role, status retained (org statistics).
+   - Registrations: answers → `DbNull`; row retained (org statistics).
+   - Certificates: hard-deleted from DB.
+   - Refresh tokens: all active tokens revoked (revokedAt updated).
+   - Per-org audit: for each membership, `pdpa.delete` action recorded (targetType `Membership`, targetId = membership id, organizationId = org id).
+   - The `deletedAt: null` condition on the user update ensures idempotency: a second `DELETE /me` within the access-token window → 204 no-op (early return at line 108 in pdpa.service.ts).
+3. **Storage cleanup (post-commit, best-effort):** certificate objects in S3-compatible storage are deleted asynchronously; failure is logged but does not fail the request (orphaned object in a private bucket).
+
+**Consent records & attendance untouched:** ConsentRecords and Attendance rows are not deleted or anonymized — they are compliance evidence and must survive the account deletion.
+
+**Outstanding access tokens:** valid only until their TTL expires; login and refresh are both blocked (deleted users cannot authenticate). The `user.deletedAt` check in the login flow prevents reactivation.
 
 ---
 
