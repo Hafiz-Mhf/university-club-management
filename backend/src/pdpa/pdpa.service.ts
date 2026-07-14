@@ -125,8 +125,11 @@ export class PdpaService {
     const anonPasswordHash = await argon2.hash(randomUUID());
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.user.update({
-        where: { id: userId },
+      // Atomic claim: the deletedAt:null condition means only one of two
+      // concurrent transactions can affect a row, making duplicate DELETE /me
+      // requests idempotent instead of racing to anonymize the same user.
+      const { count } = await tx.user.updateMany({
+        where: { id: userId, deletedAt: null },
         data: {
           email: `deleted-${randomUUID()}@anonymized.invalid`,
           fullName: 'Deleted User',
@@ -135,6 +138,7 @@ export class PdpaService {
           deletedAt: new Date(),
         },
       });
+      if (count === 0) return; // another concurrent request already claimed this deletion
       for (const m of user.memberships) {
         // update-by-unique-id: exempt from the tenant middleware by design.
         await tx.membership.update({
@@ -146,7 +150,14 @@ export class PdpaService {
         await tx.registration.update({ where: { id: r.id }, data: { answers: Prisma.DbNull } });
       }
       for (const c of user.certificates) {
-        await tx.certificate.delete({ where: { id: c.id } });
+        try {
+          await tx.certificate.delete({ where: { id: c.id } });
+        } catch (e) {
+          // belt-and-braces: the atomic claim above should already prevent a
+          // second transaction from reaching here, but guard against P2025
+          // (record not found) regardless.
+          if (!(e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025')) throw e;
+        }
       }
       await tx.refreshToken.updateMany({
         where: { userId, revokedAt: null },

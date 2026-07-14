@@ -166,7 +166,7 @@ describe('PDPA (e2e)', () => {
       expect(res.body.message).toContain('SoloOrg');
     });
 
-    it('succeeds after presidency transfer, and for plain users', async () => {
+    it('succeeds after presidency is transferred to another member', async () => {
       // President A + org
       const emailA = `pdpa-presa-${Date.now()}@test.io`;
       const tokenA = await registerAndLogin(emailA);
