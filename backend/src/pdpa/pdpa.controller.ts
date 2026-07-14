@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Delete, Get, HttpCode, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { PdpaService } from './pdpa.service';
@@ -17,5 +17,11 @@ export class PdpaController {
   @Get('export')
   export(@CurrentUser() user: { userId: string }) {
     return this.pdpa.export(user.userId);
+  }
+
+  @Delete()
+  @HttpCode(204)
+  deleteAccount(@CurrentUser() user: { userId: string }) {
+    return this.pdpa.deleteAccount(user.userId);
   }
 }

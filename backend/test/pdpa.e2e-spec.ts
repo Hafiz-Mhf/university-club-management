@@ -151,4 +151,141 @@ describe('PDPA (e2e)', () => {
       await request(app.getHttpServer()).get('/me/consents').expect(401);
     });
   });
+
+  describe('DELETE /me (anonymize)', () => {
+    const future = (d: number) => new Date(Date.now() + d * 86400000).toISOString();
+
+    it('blocks a sole president with 409 naming the org', async () => {
+      const email = `pdpa-solo-${Date.now()}@test.io`;
+      const token = await registerAndLogin(email);
+      await request(app.getHttpServer()).post('/organizations').set('Authorization', `Bearer ${token}`)
+        .send({ name: 'SoloOrg', slug: `soloorg-${Date.now()}` }).expect(201);
+
+      const res = await request(app.getHttpServer()).delete('/me')
+        .set('Authorization', `Bearer ${token}`).expect(409);
+      expect(res.body.message).toContain('SoloOrg');
+    });
+
+    it('succeeds after presidency transfer, and for plain users', async () => {
+      // President A + org
+      const emailA = `pdpa-presa-${Date.now()}@test.io`;
+      const tokenA = await registerAndLogin(emailA);
+      const org = (await request(app.getHttpServer()).post('/organizations').set('Authorization', `Bearer ${tokenA}`)
+        .send({ name: 'HandoverOrg', slug: `handover-${Date.now()}` })).body;
+
+      // Member B, promoted to PRESIDENT
+      const emailB = `pdpa-presb-${Date.now()}@test.io`;
+      await registerAndLogin(emailB);
+      const memberB = (await request(app.getHttpServer()).post(`/organizations/${org.id}/members`)
+        .set('Authorization', `Bearer ${tokenA}`)
+        .send({ email: emailB, role: 'COMMITTEE' }).expect(201)).body;
+      await request(app.getHttpServer()).patch(`/organizations/${org.id}/members/${memberB.id}/role`)
+        .set('Authorization', `Bearer ${tokenA}`)
+        .send({ role: 'PRESIDENT' }).expect(200);
+
+      // Now A can delete
+      await request(app.getHttpServer()).delete('/me')
+        .set('Authorization', `Bearer ${tokenA}`).expect(204);
+    });
+
+    it('anonymizes everything and preserves org statistics', async () => {
+      // Full-fixture participant: registration with answers, certificate, refresh token.
+      const presEmail = `pdpa-dpres-${Date.now()}@test.io`;
+      const presToken = await registerAndLogin(presEmail);
+      const orgId = (await request(app.getHttpServer()).post('/organizations').set('Authorization', `Bearer ${presToken}`)
+        .send({ name: 'DelOrg', slug: `delorg-${Date.now()}` })).body.id;
+      const eventId = (await request(app.getHttpServer()).post(`/organizations/${orgId}/events`)
+        .set('Authorization', `Bearer ${presToken}`)
+        .send({ title: 'Del Event', startAt: future(5), endAt: future(6) })).body.id;
+      await request(app.getHttpServer()).post(`/organizations/${orgId}/events/${eventId}/publish`)
+        .set('Authorization', `Bearer ${presToken}`).expect(200);
+
+      const email = `pdpa-del-${Date.now()}@test.io`;
+      await request(app.getHttpServer()).post('/auth/register')
+        .send({ email, password: 'password123', fullName: 'Delete Me', consent: true }).expect(201);
+      const login = await request(app.getHttpServer()).post('/auth/login')
+        .send({ email, password: 'password123' }).expect(201);
+      const token = login.body.accessToken;
+      const refreshToken = login.body.refreshToken;
+      const userId = (await prisma.user.findUnique({ where: { email } }))!.id;
+
+      // Membership with PII + registration with answers
+      await request(app.getHttpServer()).post(`/organizations/${orgId}/members`)
+        .set('Authorization', `Bearer ${presToken}`)
+        .send({ email, role: 'VOLUNTEER', studentId: 'S12345', phone: '0123456789' }).expect(201);
+      // Del Event has no registration form, so the API rejects free-form answer
+      // keys (RegistrationsService.validateAnswers) — register with an empty
+      // body, then seed the answers content directly via Prisma, mirroring the
+      // workaround used in the 'consents and export' suite above.
+      await request(app.getHttpServer()).post(`/organizations/${orgId}/events/${eventId}/registrations`)
+        .set('Authorization', `Bearer ${token}`).send({}).expect(201);
+      await prisma.registration.updateMany({
+        where: { eventId, organizationId: orgId, userId },
+        data: { answers: { allergy: 'peanuts' } },
+      });
+
+      // Seeded certificate (row + object)
+      const { StorageService } = await import('../src/storage/storage.service');
+      const storage = app.get(StorageService);
+      const key = `certificates/${orgId}/${eventId}/${userId}.pdf`;
+      await storage.putObject(key, Buffer.from('%PDF-1.4\ndel cert\n'), 'application/pdf');
+      await prisma.certificate.create({
+        data: { eventId, organizationId: orgId, userId, storageKey: key, fileSizeBytes: 18, uploadedByUserId: userId },
+      });
+      const signedBefore = await storage.getSignedDownloadUrl(key, 60);
+
+      const regCountBefore = await prisma.registration.count({ where: { organizationId: orgId, eventId } });
+
+      await request(app.getHttpServer()).delete('/me')
+        .set('Authorization', `Bearer ${token}`).expect(204);
+
+      // Login dead, refresh dead
+      await request(app.getHttpServer()).post('/auth/login')
+        .send({ email, password: 'password123' }).expect(401);
+      await request(app.getHttpServer()).post('/auth/refresh')
+        .send({ refreshToken }).expect(401);
+
+      // User anonymized
+      const user = (await prisma.user.findUnique({ where: { id: userId } }))!;
+      expect(user.email).not.toBe(email);
+      expect(user.email).toMatch(/@anonymized\.invalid$/);
+      expect(user.fullName).toBe('Deleted User');
+      expect(user.deletedAt).not.toBeNull();
+
+      // Membership PII gone, row + role/status intact
+      const membership = (await prisma.membership.findUnique({
+        where: { userId_organizationId: { userId, organizationId: orgId } },
+      }))!;
+      expect(membership.studentId).toBeNull();
+      expect(membership.phone).toBeNull();
+      expect(membership.role).toBe('VOLUNTEER');
+      expect(membership.status).toBe('ACTIVE');
+
+      // Registration kept, answers gone; org count unchanged
+      const regCountAfter = await prisma.registration.count({ where: { organizationId: orgId, eventId } });
+      expect(regCountAfter).toBe(regCountBefore);
+      const reg = await prisma.registration.findUnique({ where: { eventId_userId: { eventId, userId } } });
+      expect(reg!.answers).toBeNull();
+
+      // ConsentRecords retained
+      const consents = await prisma.consentRecord.findMany({ where: { userId } });
+      expect(consents.length).toBeGreaterThanOrEqual(2);
+
+      // Certificate row + object gone
+      const certs = await prisma.certificate.findMany({ where: { organizationId: orgId, userId } });
+      expect(certs).toHaveLength(0);
+      const dl = await fetch(signedBefore);
+      expect(dl.status).toBe(404);
+
+      // pdpa.delete audited in the org
+      const auditRows = await prisma.auditLog.findMany({
+        where: { organizationId: orgId, actorUserId: userId, action: 'pdpa.delete' },
+      });
+      expect(auditRows).toHaveLength(1);
+
+      // Second DELETE within the token window: idempotent 204
+      await request(app.getHttpServer()).delete('/me')
+        .set('Authorization', `Bearer ${token}`).expect(204);
+    });
+  });
 });
