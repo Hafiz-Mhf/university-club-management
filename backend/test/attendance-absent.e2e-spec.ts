@@ -12,7 +12,7 @@ describe('Attendance mark-absent (e2e)', () => {
   const future = (d: number) => new Date(Date.now() + d * 86400000).toISOString();
 
   async function registerAndLogin(email: string) {
-    await request(app.getHttpServer()).post('/auth/register').send({ email, password: 'password123', fullName: email });
+    await request(app.getHttpServer()).post('/auth/register').send({ email, password: 'password123', fullName: email, consent: true });
     return (await request(app.getHttpServer()).post('/auth/login').send({ email, password: 'password123' })).body.accessToken;
   }
 

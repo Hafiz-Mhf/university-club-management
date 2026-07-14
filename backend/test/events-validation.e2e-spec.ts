@@ -15,7 +15,7 @@ describe('Events validation (e2e)', () => {
     app = moduleRef.createNestApplication();
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
     await app.init();
-    await request(app.getHttpServer()).post('/auth/register').send({ email: pres, password: 'password123', fullName: pres });
+    await request(app.getHttpServer()).post('/auth/register').send({ email: pres, password: 'password123', fullName: pres, consent: true });
     presToken = (await request(app.getHttpServer()).post('/auth/login').send({ email: pres, password: 'password123' })).body.accessToken;
     orgId = (await request(app.getHttpServer()).post('/organizations').set('Authorization', `Bearer ${presToken}`).send({ name: 'ValOrg', slug: `val-${Date.now()}` })).body.id;
   });

@@ -19,7 +19,7 @@ describe('Registrations tenant isolation (e2e)', () => {
   const future = (d: number) => new Date(Date.now() + d * 86400000).toISOString();
 
   async function setupUserOrgEvent(email: string) {
-    await request(app.getHttpServer()).post('/auth/register').send({ email, password: 'password123', fullName: email });
+    await request(app.getHttpServer()).post('/auth/register').send({ email, password: 'password123', fullName: email, consent: true });
     const token = (await request(app.getHttpServer()).post('/auth/login').send({ email, password: 'password123' })).body.accessToken;
     const orgId = (await request(app.getHttpServer()).post('/organizations').set('Authorization', `Bearer ${token}`).send({ name: email.split('@')[0], slug: `${email.split('@')[0]}-${Date.now()}` })).body.id;
     const event = await request(app.getHttpServer()).post(`/organizations/${orgId}/events`)
@@ -39,7 +39,7 @@ describe('Registrations tenant isolation (e2e)', () => {
     const B = await setupUserOrgEvent(b);
     bToken = B.token; bOrgId = B.orgId; bEventId = B.eventId;
 
-    await request(app.getHttpServer()).post('/auth/register').send({ email: bParticipant, password: 'password123', fullName: bParticipant });
+    await request(app.getHttpServer()).post('/auth/register').send({ email: bParticipant, password: 'password123', fullName: bParticipant, consent: true });
     bpToken = (await request(app.getHttpServer()).post('/auth/login').send({ email: bParticipant, password: 'password123' })).body.accessToken;
     const reg = await request(app.getHttpServer())
       .post(`/organizations/${bOrgId}/events/${bEventId}/registrations`)

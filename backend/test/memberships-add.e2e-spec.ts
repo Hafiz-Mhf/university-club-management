@@ -12,7 +12,7 @@ describe('Add member (e2e)', () => {
 
   async function register(email: string) {
     await request(app.getHttpServer()).post('/auth/register')
-      .send({ email, password: 'password123', fullName: email.split('@')[0] });
+      .send({ email, password: 'password123', fullName: email.split('@')[0], consent: true });
   }
 
   beforeAll(async () => {

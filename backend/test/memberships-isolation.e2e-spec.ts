@@ -14,7 +14,7 @@ describe('Membership tenant isolation (e2e)', () => {
   const b = `ib-${Date.now()}@test.io`;
 
   async function setupUserOrg(email: string) {
-    await request(app.getHttpServer()).post('/auth/register').send({ email, password: 'password123', fullName: email });
+    await request(app.getHttpServer()).post('/auth/register').send({ email, password: 'password123', fullName: email, consent: true });
     const token = (await request(app.getHttpServer()).post('/auth/login').send({ email, password: 'password123' })).body.accessToken;
     const orgId = (await request(app.getHttpServer()).post('/organizations').set('Authorization', `Bearer ${token}`).send({ name: email, slug: `${email.split('@')[0]}-${Date.now()}` })).body.id;
     const memberId = (await request(app.getHttpServer()).get(`/organizations/${orgId}/members/me`).set('Authorization', `Bearer ${token}`)).body.id;

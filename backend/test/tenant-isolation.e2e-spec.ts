@@ -9,7 +9,7 @@ describe('Tenant isolation (e2e)', () => {
   async function makeUserWithOrg(tag: string) {
     const email = `${tag}-${Date.now()}@test.io`;
     await request(app.getHttpServer()).post('/auth/register')
-      .send({ email, password: 'password123', fullName: tag });
+      .send({ email, password: 'password123', fullName: tag, consent: true });
     const login = await request(app.getHttpServer()).post('/auth/login')
       .send({ email, password: 'password123' });
     const token = login.body.accessToken;

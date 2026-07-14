@@ -17,7 +17,7 @@ describe('List + read own registration (e2e)', () => {
     app = moduleRef.createNestApplication();
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
     await app.init();
-    await request(app.getHttpServer()).post('/auth/register').send({ email: pres, password: 'password123', fullName: pres });
+    await request(app.getHttpServer()).post('/auth/register').send({ email: pres, password: 'password123', fullName: pres, consent: true });
     presToken = (await request(app.getHttpServer()).post('/auth/login').send({ email: pres, password: 'password123' })).body.accessToken;
     orgId = (await request(app.getHttpServer()).post('/organizations').set('Authorization', `Bearer ${presToken}`).send({ name: 'ListOrg', slug: `list-${Date.now()}` })).body.id;
     const event = await request(app.getHttpServer()).post(`/organizations/${orgId}/events`)
@@ -27,7 +27,7 @@ describe('List + read own registration (e2e)', () => {
       .set('Authorization', `Bearer ${presToken}`).expect(200);
 
     const partEmail = `part-${Date.now()}@test.io`;
-    await request(app.getHttpServer()).post('/auth/register').send({ email: partEmail, password: 'password123', fullName: partEmail });
+    await request(app.getHttpServer()).post('/auth/register').send({ email: partEmail, password: 'password123', fullName: partEmail, consent: true });
     partToken = (await request(app.getHttpServer()).post('/auth/login').send({ email: partEmail, password: 'password123' })).body.accessToken;
     await request(app.getHttpServer()).post(`/organizations/${orgId}/events/${eventId}/registrations`)
       .set('Authorization', `Bearer ${partToken}`).send({}).expect(201);

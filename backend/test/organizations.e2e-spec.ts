@@ -15,7 +15,7 @@ describe('Organizations profile/list (e2e)', () => {
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
     await app.init();
     await request(app.getHttpServer()).post('/auth/register')
-      .send({ email, password: 'password123', fullName: 'Org Owner' });
+      .send({ email, password: 'password123', fullName: 'Org Owner', consent: true });
     const login = await request(app.getHttpServer()).post('/auth/login')
       .send({ email, password: 'password123' });
     token = login.body.accessToken;

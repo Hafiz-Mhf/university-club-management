@@ -22,7 +22,7 @@ describe('Auth (e2e)', () => {
   it('registers, logs in, and returns me', async () => {
     await request(app.getHttpServer())
       .post('/auth/register')
-      .send({ email, password: 'password123', fullName: 'E2E' })
+      .send({ email, password: 'password123', fullName: 'E2E', consent: true })
       .expect(201);
     const login = await request(app.getHttpServer())
       .post('/auth/login')

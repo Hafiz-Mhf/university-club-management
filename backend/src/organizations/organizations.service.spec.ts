@@ -23,7 +23,7 @@ describe('OrganizationsService.create', () => {
     prisma = moduleRef.get(PrismaService);
     auth = moduleRef.get(AuthService);
     await prisma.onModuleInit();
-    const u = await auth.register({ email: `org-${Date.now()}@test.io`, password: 'password123', fullName: 'Pres' });
+    const u = await auth.register({ email: `org-${Date.now()}@test.io`, password: 'password123', fullName: 'Pres', consent: true });
     userId = u.id;
   });
   afterAll(async () => {
@@ -31,6 +31,7 @@ describe('OrganizationsService.create', () => {
       await prisma.membership.deleteMany({ where: { userId, organizationId: orgId } });
     }
     await prisma.organization.deleteMany({ where: { memberships: { some: { userId } } } });
+    await prisma.consentRecord.deleteMany({ where: { userId } });
     await prisma.user.delete({ where: { id: userId } });
     await prisma.$disconnect();
   });

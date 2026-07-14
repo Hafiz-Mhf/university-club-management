@@ -15,7 +15,7 @@ describe('Register for an event (e2e)', () => {
     return (await request(app.getHttpServer()).post('/auth/login').send({ email, password: 'password123' })).body.accessToken;
   }
   async function register(email: string) {
-    await request(app.getHttpServer()).post('/auth/register').send({ email, password: 'password123', fullName: email });
+    await request(app.getHttpServer()).post('/auth/register').send({ email, password: 'password123', fullName: email, consent: true });
   }
 
   beforeAll(async () => {
