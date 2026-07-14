@@ -1,4 +1,4 @@
-import { IsEmail, IsString, MinLength } from 'class-validator';
+import { Equals, IsEmail, IsString, MinLength } from 'class-validator';
 
 export class RegisterDto {
   @IsEmail()
@@ -11,4 +11,8 @@ export class RegisterDto {
   @IsString()
   @MinLength(1)
   fullName!: string;
+
+  // PDPA: explicit consent to the account privacy policy. Missing or false → 400.
+  @Equals(true)
+  consent!: boolean;
 }

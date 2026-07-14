@@ -23,19 +23,21 @@ describe('AuthService.register', () => {
 
   it('hashes the password (never stores plaintext)', async () => {
     const email = `u-${Date.now()}@test.io`;
-    const res = await service.register({ email, password: 'password123', fullName: 'Jane' });
+    const res = await service.register({ email, password: 'password123', fullName: 'Jane', consent: true });
     const stored = await prisma.user.findUnique({ where: { id: res.id } });
     expect(stored!.passwordHash).not.toBe('password123');
     expect(stored!.passwordHash).toContain('$argon2');
+    await prisma.consentRecord.deleteMany({ where: { userId: res.id } });
     await prisma.user.delete({ where: { id: res.id } });
   });
 
   it('rejects duplicate email', async () => {
     const email = `dup-${Date.now()}@test.io`;
-    const a = await service.register({ email, password: 'password123', fullName: 'A' });
+    const a = await service.register({ email, password: 'password123', fullName: 'A', consent: true });
     await expect(
-      service.register({ email, password: 'password123', fullName: 'B' }),
+      service.register({ email, password: 'password123', fullName: 'B', consent: true }),
     ).rejects.toBeInstanceOf(ConflictException);
+    await prisma.consentRecord.deleteMany({ where: { userId: a.id } });
     await prisma.user.delete({ where: { id: a.id } });
   });
 });

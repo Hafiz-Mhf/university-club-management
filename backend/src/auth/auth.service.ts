@@ -8,6 +8,7 @@ import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenRepository } from './refresh-token.repository';
 import { sha256 } from './token.util';
+import { CURRENT_POLICY_VERSION } from '../pdpa/policy-version';
 
 @Injectable()
 export class AuthService {
@@ -23,7 +24,14 @@ export class AuthService {
     if (existing) throw new ConflictException('Email already registered');
     const passwordHash = await argon2.hash(dto.password);
     const user = await this.prisma.user.create({
-      data: { email: dto.email, passwordHash, fullName: dto.fullName },
+      data: {
+        email: dto.email,
+        passwordHash,
+        fullName: dto.fullName,
+        consentRecords: {
+          create: { purpose: 'account', policyVersion: CURRENT_POLICY_VERSION },
+        },
+      },
     });
     return { id: user.id, email: user.email };
   }

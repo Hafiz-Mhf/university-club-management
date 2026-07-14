@@ -19,7 +19,7 @@ describe('Auth refresh/logout (e2e)', () => {
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
     await app.init();
     await request(app.getHttpServer()).post('/auth/register')
-      .send({ email, password: 'password123', fullName: 'RF' });
+      .send({ email, password: 'password123', fullName: 'RF', consent: true });
   });
   afterAll(async () => { await app.close(); });
 

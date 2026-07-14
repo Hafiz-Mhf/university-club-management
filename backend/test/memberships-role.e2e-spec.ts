@@ -18,7 +18,7 @@ describe('Change member role (e2e)', () => {
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
     await app.init();
     for (const e of [pres, other]) {
-      await request(app.getHttpServer()).post('/auth/register').send({ email: e, password: 'password123', fullName: e });
+      await request(app.getHttpServer()).post('/auth/register').send({ email: e, password: 'password123', fullName: e, consent: true });
     }
     presToken = (await request(app.getHttpServer()).post('/auth/login').send({ email: pres, password: 'password123' })).body.accessToken;
     orgId = (await request(app.getHttpServer()).post('/organizations').set('Authorization', `Bearer ${presToken}`).send({ name: 'RoleOrg', slug: `r-${Date.now()}` })).body.id;

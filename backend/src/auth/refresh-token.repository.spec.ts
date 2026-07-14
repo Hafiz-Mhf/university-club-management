@@ -20,11 +20,12 @@ describe('RefreshTokenRepository', () => {
     prisma = moduleRef.get(PrismaService);
     auth = moduleRef.get(AuthService);
     await prisma.onModuleInit();
-    const u = await auth.register({ email: `rt-${Date.now()}@test.io`, password: 'password123', fullName: 'RT' });
+    const u = await auth.register({ email: `rt-${Date.now()}@test.io`, password: 'password123', fullName: 'RT', consent: true });
     userId = u.id;
   });
   afterAll(async () => {
     await prisma.refreshToken.deleteMany({ where: { userId } });
+    await prisma.consentRecord.deleteMany({ where: { userId } });
     await prisma.user.delete({ where: { id: userId } });
     await prisma.$disconnect();
   });

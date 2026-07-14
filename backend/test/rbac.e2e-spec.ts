@@ -22,7 +22,7 @@ describe('RBAC (e2e)', () => {
   it('PRESIDENT can update settings; VOLUNTEER cannot', async () => {
     // President creates org
     const pEmail = `pres-${Date.now()}@test.io`;
-    await request(app.getHttpServer()).post('/auth/register').send({ email: pEmail, password: 'password123', fullName: 'P' });
+    await request(app.getHttpServer()).post('/auth/register').send({ email: pEmail, password: 'password123', fullName: 'P', consent: true });
     const pLogin = await request(app.getHttpServer()).post('/auth/login').send({ email: pEmail, password: 'password123' });
     const pToken = pLogin.body.accessToken;
     const org = await request(app.getHttpServer()).post('/organizations')
@@ -35,7 +35,7 @@ describe('RBAC (e2e)', () => {
 
     // Volunteer joins org (seed membership directly), then is forbidden
     const vEmail = `vol-${Date.now()}@test.io`;
-    await request(app.getHttpServer()).post('/auth/register').send({ email: vEmail, password: 'password123', fullName: 'V' });
+    await request(app.getHttpServer()).post('/auth/register').send({ email: vEmail, password: 'password123', fullName: 'V', consent: true });
     const vUser = await prisma.user.findUnique({ where: { email: vEmail } });
     await prisma.membership.create({ data: { userId: vUser!.id, organizationId: orgId, role: 'VOLUNTEER' } });
     const vLogin = await request(app.getHttpServer()).post('/auth/login').send({ email: vEmail, password: 'password123' });

@@ -24,10 +24,10 @@ describe('Events lifecycle (e2e)', () => {
     app = moduleRef.createNestApplication();
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
     await app.init();
-    await request(app.getHttpServer()).post('/auth/register').send({ email: pres, password: 'password123', fullName: pres });
+    await request(app.getHttpServer()).post('/auth/register').send({ email: pres, password: 'password123', fullName: pres, consent: true });
     presToken = (await request(app.getHttpServer()).post('/auth/login').send({ email: pres, password: 'password123' })).body.accessToken;
     orgId = (await request(app.getHttpServer()).post('/organizations').set('Authorization', `Bearer ${presToken}`).send({ name: 'LifeOrg', slug: `life-${Date.now()}` })).body.id;
-    await request(app.getHttpServer()).post('/auth/register').send({ email: committee, password: 'password123', fullName: committee });
+    await request(app.getHttpServer()).post('/auth/register').send({ email: committee, password: 'password123', fullName: committee, consent: true });
     await request(app.getHttpServer()).post(`/organizations/${orgId}/members`)
       .set('Authorization', `Bearer ${presToken}`).send({ email: committee, role: 'COMMITTEE' });
     committeeToken = (await request(app.getHttpServer()).post('/auth/login').send({ email: committee, password: 'password123' })).body.accessToken;

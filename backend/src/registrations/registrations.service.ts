@@ -4,8 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { AttendanceService } from '../attendance/attendance.service';
 import { RegisterDto } from './dto/register.dto';
-
-const CURRENT_POLICY_VERSION = 'v1';
+import { CURRENT_POLICY_VERSION } from '../pdpa/policy-version';
 
 type FormFieldForValidation = { id: string; label: string; required: boolean; type: string; options: unknown };
 

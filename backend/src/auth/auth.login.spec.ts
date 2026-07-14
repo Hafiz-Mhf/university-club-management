@@ -20,11 +20,12 @@ describe('AuthService.login', () => {
     service = moduleRef.get(AuthService);
     prisma = moduleRef.get(PrismaService);
     await prisma.onModuleInit();
-    const u = await service.register({ email, password: 'password123', fullName: 'Log' });
+    const u = await service.register({ email, password: 'password123', fullName: 'Log', consent: true });
     userId = u.id;
   });
   afterAll(async () => {
     await prisma.refreshToken.deleteMany({ where: { userId } });
+    await prisma.consentRecord.deleteMany({ where: { userId } });
     await prisma.user.delete({ where: { id: userId } });
     await prisma.$disconnect();
   });

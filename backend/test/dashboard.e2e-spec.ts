@@ -11,7 +11,7 @@ describe('Dashboard summary (e2e)', () => {
   const pdfBytes = () => Buffer.from('%PDF-1.4\n%mock certificate content\n');
 
   async function registerAndLogin(email: string) {
-    await request(app.getHttpServer()).post('/auth/register').send({ email, password: 'password123', fullName: email });
+    await request(app.getHttpServer()).post('/auth/register').send({ email, password: 'password123', fullName: email, consent: true });
     return (await request(app.getHttpServer()).post('/auth/login').send({ email, password: 'password123' })).body.accessToken;
   }
 

@@ -18,13 +18,13 @@ describe('Events CRUD (e2e)', () => {
     app = moduleRef.createNestApplication();
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
     await app.init();
-    await request(app.getHttpServer()).post('/auth/register').send({ email: pres, password: 'password123', fullName: pres });
+    await request(app.getHttpServer()).post('/auth/register').send({ email: pres, password: 'password123', fullName: pres, consent: true });
     presToken = (await request(app.getHttpServer()).post('/auth/login').send({ email: pres, password: 'password123' })).body.accessToken;
     orgId = (await request(app.getHttpServer()).post('/organizations').set('Authorization', `Bearer ${presToken}`).send({ name: 'EvOrg', slug: `ev-${Date.now()}` })).body.id;
 
     // seed a plain member (VOLUNTEER) to test DRAFT hiding
     memberEmail = `em-${Date.now()}@test.io`;
-    await request(app.getHttpServer()).post('/auth/register').send({ email: memberEmail, password: 'password123', fullName: memberEmail });
+    await request(app.getHttpServer()).post('/auth/register').send({ email: memberEmail, password: 'password123', fullName: memberEmail, consent: true });
     await request(app.getHttpServer()).post(`/organizations/${orgId}/members`)
       .set('Authorization', `Bearer ${presToken}`).send({ email: memberEmail, role: 'VOLUNTEER' });
     memberToken = (await request(app.getHttpServer()).post('/auth/login').send({ email: memberEmail, password: 'password123' })).body.accessToken;

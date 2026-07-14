@@ -9,7 +9,7 @@ describe('Audit log query (e2e)', () => {
   const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
   async function registerAndLogin(email: string) {
-    await request(app.getHttpServer()).post('/auth/register').send({ email, password: 'password123', fullName: email });
+    await request(app.getHttpServer()).post('/auth/register').send({ email, password: 'password123', fullName: email, consent: true });
     return (await request(app.getHttpServer()).post('/auth/login').send({ email, password: 'password123' })).body.accessToken;
   }
 

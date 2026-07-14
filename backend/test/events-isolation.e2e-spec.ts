@@ -15,7 +15,7 @@ describe('Events tenant isolation (e2e)', () => {
   const future = (d: number) => new Date(Date.now() + d * 86400000).toISOString();
 
   async function setupUserOrg(email: string) {
-    await request(app.getHttpServer()).post('/auth/register').send({ email, password: 'password123', fullName: email });
+    await request(app.getHttpServer()).post('/auth/register').send({ email, password: 'password123', fullName: email, consent: true });
     const token = (await request(app.getHttpServer()).post('/auth/login').send({ email, password: 'password123' })).body.accessToken;
     const orgId = (await request(app.getHttpServer()).post('/organizations').set('Authorization', `Bearer ${token}`).send({ name: email.split('@')[0], slug: `${email.split('@')[0]}-${Date.now()}` })).body.id;
     return { token, orgId };

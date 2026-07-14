@@ -20,11 +20,12 @@ describe('AuthService.login persists refresh hash', () => {
     auth = moduleRef.get(AuthService);
     prisma = moduleRef.get(PrismaService);
     await prisma.onModuleInit();
-    const u = await auth.register({ email, password: 'password123', fullName: 'LP' });
+    const u = await auth.register({ email, password: 'password123', fullName: 'LP', consent: true });
     userId = u.id;
   });
   afterAll(async () => {
     await prisma.refreshToken.deleteMany({ where: { userId } });
+    await prisma.consentRecord.deleteMany({ where: { userId } });
     await prisma.user.delete({ where: { id: userId } });
     await prisma.$disconnect();
   });
