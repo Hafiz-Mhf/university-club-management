@@ -1,6 +1,47 @@
+# Dependencies
 node_modules/
+
+# Build artifacts
 dist/
+build/
+temp/
+out/
+
+# Environment variables
 .env
+.env.production
+.env.development
+.env.local
+.env.*.local
+
+# Logs
+logs/
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# IDE / Editor files
+.vscode/
+.idea/
+*.swp
+*~
+
+# Testing / Coverage
 coverage/
-.vercel
+.nyc_output/
+
+# Deployment
+.vercel/
+
+# Next.js
+.next/
+.next/cache/
+out/
+dist/
+build/
+
+# Misc
+Thumbs.db
+.DS_Store
