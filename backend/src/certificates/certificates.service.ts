@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
@@ -12,6 +12,8 @@ type UploadedFile = { mimetype: string; size: number; buffer: Buffer };
 
 @Injectable()
 export class CertificatesService {
+  private readonly logger = new Logger(CertificatesService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
@@ -102,14 +104,27 @@ export class CertificatesService {
     const certificate = await this.prisma.certificate.findFirst({ where: { eventId, organizationId, userId } });
     if (!certificate) throw new NotFoundException('No certificate found');
     const downloadUrl = await this.storage.getSignedDownloadUrl(certificate.storageKey, SIGNED_URL_TTL_SECONDS);
+    await this.trackDownload(certificate.id, userId);
     return { ...certificate, downloadUrl };
   }
 
-  async download(organizationId: string, eventId: string, certificateId: string) {
+  async download(organizationId: string, eventId: string, certificateId: string, actorUserId: string) {
     const certificate = await this.prisma.certificate.findFirst({ where: { id: certificateId, organizationId, eventId } });
     if (!certificate) throw new NotFoundException('Certificate not found in this event');
     const downloadUrl = await this.storage.getSignedDownloadUrl(certificate.storageKey, SIGNED_URL_TTL_SECONDS);
+    await this.trackDownload(certificate.id, actorUserId);
     return { ...certificate, downloadUrl };
+  }
+
+  // Best-effort: a signed URL has already been minted and handed to the
+  // caller by the time this runs. A tracking-write hiccup must never turn
+  // a successful download into a 500.
+  private async trackDownload(certificateId: string, userId: string) {
+    try {
+      await this.prisma.certificateDownload.create({ data: { certificateId, userId } });
+    } catch (error) {
+      this.logger.warn(`Failed to record certificate download (certificateId=${certificateId}): ${error}`);
+    }
   }
 
   async remove(organizationId: string, eventId: string, certificateId: string, actorUserId: string) {

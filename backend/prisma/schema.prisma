@@ -208,10 +208,21 @@ model Certificate {
   storageKey       String
   fileSizeBytes    Int
   uploadedByUserId String
+  downloads        CertificateDownload[]
   createdAt        DateTime @default(now())
 
   @@unique([eventId, userId])
   @@index([organizationId])
+}
+
+model CertificateDownload {
+  id            String      @id @default(uuid())
+  certificateId String
+  certificate   Certificate @relation(fields: [certificateId], references: [id])
+  userId        String
+  downloadedAt  DateTime    @default(now())
+
+  @@index([certificateId])
 }
 
 model ConsentRecord {

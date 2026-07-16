@@ -151,4 +151,48 @@ describe('Certificate list + me + download (e2e)', () => {
       .get(`/organizations/${orgId}/events/${otherEvent.body.id}/certificates/${certId}/download`)
       .set('Authorization', `Bearer ${presToken}`).expect(404);
   });
+
+  it('GET /me records a CertificateDownload row', async () => {
+    const { token, userId } = await presentParticipant();
+    const bytes = Buffer.from('%PDF-1.4\n%tracking me bytes\n');
+    await request(app.getHttpServer())
+      .post(`/organizations/${orgId}/events/${eventId}/certificates`)
+      .set('Authorization', `Bearer ${presToken}`)
+      .field('userId', userId)
+      .attach('file', bytes, { filename: 'cert.pdf', contentType: 'application/pdf' })
+      .expect(201);
+
+    const res = await request(app.getHttpServer())
+      .get(`/organizations/${orgId}/events/${eventId}/certificates/me`)
+      .set('Authorization', `Bearer ${token}`).expect(200);
+
+    const downloads = await prisma.certificateDownload.findMany({ where: { certificateId: res.body.id, userId } });
+    expect(downloads).toHaveLength(1);
+  });
+
+  it('committee download-by-id records a CertificateDownload row attributed to the committee actor', async () => {
+    const { userId } = await presentParticipant();
+    const bytes = Buffer.from('%PDF-1.4\n%tracking committee bytes\n');
+    await request(app.getHttpServer())
+      .post(`/organizations/${orgId}/events/${eventId}/certificates`)
+      .set('Authorization', `Bearer ${presToken}`)
+      .field('userId', userId)
+      .attach('file', bytes, { filename: 'cert.pdf', contentType: 'application/pdf' })
+      .expect(201);
+
+    const list = await request(app.getHttpServer())
+      .get(`/organizations/${orgId}/events/${eventId}/certificates`)
+      .set('Authorization', `Bearer ${presToken}`).expect(200);
+    const certId = list.body.find((c: { userId: string }) => c.userId === userId).id;
+
+    const presUserId = (await prisma.user.findUnique({ where: { email: pres } }))!.id;
+
+    await request(app.getHttpServer())
+      .get(`/organizations/${orgId}/events/${eventId}/certificates/${certId}/download`)
+      .set('Authorization', `Bearer ${presToken}`).expect(200);
+
+    const downloads = await prisma.certificateDownload.findMany({ where: { certificateId: certId } });
+    expect(downloads).toHaveLength(1);
+    expect(downloads[0].userId).toBe(presUserId);
+  });
 });
