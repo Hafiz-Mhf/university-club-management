@@ -48,6 +48,14 @@ export class EventsService {
     });
   }
 
+  listPublicUpcoming(organizationId: string) {
+    return this.prisma.event.findMany({
+      where: { organizationId, status: 'PUBLISHED', startAt: { gte: new Date() } },
+      orderBy: { startAt: 'asc' },
+      select: { id: true, title: true, startAt: true, endAt: true, venue: true },
+    });
+  }
+
   async findOne(organizationId: string, eventId: string, actorRole: Role) {
     const event = await this.prisma.event.findFirst({ where: { id: eventId, organizationId } });
     if (!event) throw new NotFoundException('Event not found in this organization');

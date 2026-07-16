@@ -17,6 +17,7 @@ import { MinutesModule } from './minutes/minutes.module';
 import { AssetsModule } from './assets/assets.module';
 import { GalleryModule } from './gallery/gallery.module';
 import { AchievementsModule } from './achievements/achievements.module';
+import { PublicModule } from './public/public.module';
 import { envValidationSchema } from './config/env.validation';
 
 @Module({
@@ -39,6 +40,7 @@ import { envValidationSchema } from './config/env.validation';
     AssetsModule,
     GalleryModule,
     AchievementsModule,
+    PublicModule,
   ],
 })
 export class AppModule {}
