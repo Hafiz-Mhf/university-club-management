@@ -493,6 +493,20 @@ Quantity-per-type inventory, not individual-unit tracking. `condition` defaults 
 
 ---
 
+### As built — public club page (shipped)
+
+Gallery: `POST`/`GET`/`DELETE /organizations/:orgId/gallery*`. Upload/delete `MANAGE_EVENTS`; list any ACTIVE member, list response embeds a signed `downloadUrl` per photo (10MB cap, PNG/JPEG only, quota summed across `Certificate` + `OrgFile` + `GalleryPhoto`).
+
+Achievements: full CRUD under `/organizations/:orgId/achievements*`, same RBAC/audit shape as Asset Management.
+
+**Public routes — the first unauthenticated surface in this codebase:** `GET /public/organizations/:orgId/profile`, `/gallery`, `/achievements`. No `JwtAuthGuard`, no `TenantGuard`, no `RolesGuard` — anyone can call these with no credentials at all. Each explicitly checks the org exists (`404` if not) since there's no guard to do that implicitly. The profile response is a fixed field allowlist — `name`, `description`, `logoUrl` (signed, if `logoKey` is set), `primaryColor`, `socialLinks`, `advisors`, `upcomingEvents` (published + future only) — and never includes `storageQuotaMb`, `settings`, or any other `Organization` column.
+
+Public reads are unaudited (no authenticated actor to attribute them to).
+
+Anonymous event registration remains out of scope — the public profile only surfaces event *links* (id/title/dates); registering still requires signup/login.
+
+---
+
 ## 3. Multi-Tenant Isolation
 
 - Every tenant-owned row carries `organizationId`.

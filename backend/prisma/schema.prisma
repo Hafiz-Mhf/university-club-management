@@ -110,6 +110,8 @@ model Organization {
   files          OrgFile[]
   minutes        MeetingMinutes[]
   assets         Asset[]
+  galleryPhotos  GalleryPhoto[]
+  achievements   Achievement[]
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 }
@@ -277,6 +279,33 @@ model Asset {
   createdByUserId String
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
+
+  @@index([organizationId])
+}
+
+model GalleryPhoto {
+  id               String       @id @default(uuid())
+  organizationId   String
+  organization     Organization @relation(fields: [organizationId], references: [id])
+  storageKey       String
+  caption          String?
+  fileSizeBytes    Int
+  uploadedByUserId String
+  createdAt        DateTime     @default(now())
+
+  @@index([organizationId])
+}
+
+model Achievement {
+  id              String       @id @default(uuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  title           String
+  description     String
+  year            Int
+  createdByUserId String
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
 
   @@index([organizationId])
 }
