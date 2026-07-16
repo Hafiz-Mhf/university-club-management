@@ -179,7 +179,7 @@ Any validation failure → `400 BadRequestException`.
 | Route | Roles |
 |-------|-------|
 | Gallery upload/delete | `MANAGE_EVENTS` |
-| Gallery list/single-download | Any ACTIVE member |
+| Gallery list (signed URLs embedded) | Any ACTIVE member |
 | Achievement create/edit/delete | `MANAGE_EVENTS` |
 | Achievement list/get | Any ACTIVE member |
 | All three `/public/*` routes | **No auth — open to the internet** |
