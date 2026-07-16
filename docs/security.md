@@ -479,6 +479,20 @@ Five routes under `/organizations/:orgId/minutes*`: `POST` create, `GET` list, `
 
 ---
 
+### As built — asset management (shipped)
+
+Five routes under `/organizations/:orgId/assets*`: `POST` create, `GET` list, `GET /:assetId`, `PATCH /:assetId`, `DELETE /:assetId`. Create/edit/delete are gated `JwtAuthGuard → TenantGuard → RolesGuard`, `MANAGE_EVENTS` — same tier as Files/Minutes. List/get-one are gated `JwtAuthGuard → TenantGuard` only — any ACTIVE member, any role.
+
+Quantity-per-type inventory, not individual-unit tracking. `condition` defaults `GOOD` if omitted at creation.
+
+**List is unpaginated** — a bounded inventory (dozens of asset types), unlike the paginated Meeting Minutes archive.
+
+**No checkout/return tracking, no purchase/cost fields** — out of scope this phase (cost tracking deferred to a future budget-management item).
+
+**Audit:** three new actions, `asset.create`, `asset.update`, `asset.delete` (`targetType: 'Asset'`) — matches `event.create`/`event.update`/`event.delete`'s shape. Reads (list, get-one) are unaudited.
+
+---
+
 ## 3. Multi-Tenant Isolation
 
 - Every tenant-owned row carries `organizationId`.

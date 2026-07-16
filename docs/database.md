@@ -205,6 +205,26 @@ matching the `Json`-for-structured-non-relational-data convention already
 used by `Organization.advisors`/`socialLinks`, `Membership.committeeHistory`,
 and `Registration.answers`.
 
+### Asset (shipped)
+| Field | Type | Notes |
+|-------|------|-------|
+| id | uuid (PK) | |
+| organizationId | uuid (FK → Organization) | |
+| name | string | asset type name, e.g. "Folding Chairs" |
+| quantity | int | total count of this asset type owned, ≥ 1 |
+| condition | enum (`GOOD`, `DAMAGED`, `LOST`) | defaults `GOOD` at creation |
+| location | string? | free text, e.g. "Storage Room B" — no fixed enum |
+| notes | string? | |
+| createdByUserId | uuid | plain column, no FK relation |
+| createdAt | timestamp | |
+| updatedAt | timestamp | |
+| — | `@@index([organizationId])` | |
+
+`Asset` **is** in `TENANT_SCOPED_MODELS` (same reasoning as `OrgFile` and
+`MeetingMinutes`). Quantity-per-type, not individual-unit tracking — one
+row per asset type, not one row per physical item. List is unpaginated
+(bounded inventory, unlike the Meeting Minutes archive), sorted `name asc`.
+
 ### ConsentRecord (PDPA) (shipped)
 | Field | Type | Notes |
 |-------|------|-------|
