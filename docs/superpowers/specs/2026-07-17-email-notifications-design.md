@@ -215,10 +215,15 @@ No read endpoints in this module, so nothing else to audit.
   including the "skip if already past" branches on `publish()` and
   `update()`.
 
-**E2E** (`backend/test/notifications-*.e2e-spec.ts`): run the queue in the
-same process against a real (test) Redis, but assert on **enqueued job
-state** (BullMQ's `getJob`/`getDelayed` etc.) and on **audit rows**, not on
-actual SMTP delivery — no mailpit dependency in CI.
+**E2E** (`backend/test/notifications-*.e2e-spec.ts`): runs against the same
+local `redis` and (new) `mailpit` docker-compose containers every other e2e
+suite already depends on (e.g. `files-upload.e2e-spec.ts` against real
+MinIO) — there is no CI pipeline in this repo yet, so "runs in CI" isn't a
+constraint. Assert on **enqueued/delayed job state** (BullMQ's `getJob`
+/`getDelayed` etc.) and on **audit rows** (via the existing
+`GET /organizations/:orgId/audit-logs?action=notification.email` endpoint,
+polled with a short retry loop since the worker processes jobs
+asynchronously) rather than by reading mailpit's inbox.
 
 - Registering into an event under capacity → job for
   `registration.approved` enqueued for the registrant, plus one
