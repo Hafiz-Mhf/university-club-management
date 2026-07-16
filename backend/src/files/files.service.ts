@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { FileCategory } from '@prisma/client';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -14,6 +14,7 @@ const ALLOWED_MIME = new Set([
   'image/jpeg',
 ]);
 const MAX_FILE_BYTES = 20 * 1024 * 1024;
+const SIGNED_URL_TTL_SECONDS = 300;
 
 const EXT_BY_MIME: Record<string, string> = {
   'application/pdf': 'pdf',
@@ -75,5 +76,26 @@ export class FilesService {
       }, tx);
       return orgFile;
     });
+  }
+
+  list(organizationId: string, category?: string) {
+    const validCategory = category && Object.values(FileCategory).includes(category as FileCategory)
+      ? (category as FileCategory)
+      : undefined;
+    return this.prisma.orgFile.findMany({
+      where: { organizationId, ...(validCategory && { category: validCategory }) },
+      select: {
+        id: true, title: true, category: true, originalFilename: true,
+        mimeType: true, fileSizeBytes: true, uploadedByUserId: true, createdAt: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async getDownloadUrl(organizationId: string, fileId: string) {
+    const orgFile = await this.prisma.orgFile.findFirst({ where: { id: fileId, organizationId } });
+    if (!orgFile) throw new NotFoundException('File not found in this organization');
+    const downloadUrl = await this.storage.getSignedDownloadUrl(orgFile.storageKey, SIGNED_URL_TTL_SECONDS);
+    return { downloadUrl };
   }
 }

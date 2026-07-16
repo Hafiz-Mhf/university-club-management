@@ -1,4 +1,4 @@
-import { Body, Controller, Post, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { FilesService } from './files.service';
 import { UploadFileDto } from './dto/upload-file.dto';
@@ -25,5 +25,17 @@ export class FilesController {
     @CurrentUser() user: { userId: string },
   ) {
     return this.files.upload(orgId, dto.title, dto.category, file, user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard, TenantGuard)
+  @Get()
+  list(@OrgId() orgId: string, @Query('category') category?: string) {
+    return this.files.list(orgId, category);
+  }
+
+  @UseGuards(JwtAuthGuard, TenantGuard)
+  @Get(':fileId/download')
+  download(@OrgId() orgId: string, @Param('fileId') fileId: string) {
+    return this.files.getDownloadUrl(orgId, fileId);
   }
 }
