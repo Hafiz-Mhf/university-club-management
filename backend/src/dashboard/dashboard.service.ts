@@ -63,7 +63,11 @@ export class DashboardService {
         take: RECENT_REGISTRATIONS_LIMIT,
       }),
       this.prisma.auditLog.findMany({
-        where: { organizationId },
+        // notification.email rows are actorless system events written
+        // asynchronously by the notifications worker — they'd crowd actor
+        // activity out of the capped feed. Full history stays queryable at
+        // /organizations/:orgId/audit-logs.
+        where: { organizationId, action: { not: 'notification.email' } },
         select: {
           id: true,
           action: true,

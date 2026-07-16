@@ -50,19 +50,38 @@ describe('Audit log query (e2e)', () => {
       const partToken = await registerAndLogin(`audit-part-${Date.now()}@test.io`);
       await request(app.getHttpServer()).post(`/organizations/${orgId}/events/${eventA.body.id}/registrations`)
         .set('Authorization', `Bearer ${partToken}`).send({}).expect(201);
+
+      // The registration asynchronously produces exactly 2 notification.email
+      // audit rows (registration.approved -> registrant, registration.new ->
+      // president, the org's only committee-tier member). Wait for both so
+      // every assertion below sees a stable 6-row ledger.
+      const deadline = Date.now() + 5000;
+      for (;;) {
+        const res = await request(app.getHttpServer())
+          .get(`/organizations/${orgId}/audit-logs?action=notification.email`)
+          .set('Authorization', `Bearer ${presToken}`);
+        if (res.body.total === 2) break;
+        if (Date.now() > deadline) throw new Error('Timed out waiting for notification.email audit rows');
+        await wait(200);
+      }
     });
 
-    it('returns all 4 rows, newest first, with default pagination', async () => {
+    it('returns all 6 rows, newest first, with default pagination', async () => {
       const res = await request(app.getHttpServer())
         .get(`/organizations/${orgId}/audit-logs`)
         .set('Authorization', `Bearer ${presToken}`).expect(200);
 
-      expect(res.body.total).toBe(4);
+      expect(res.body.total).toBe(6);
       expect(res.body.page).toBe(1);
       expect(res.body.pageSize).toBe(25);
-      expect(res.body.data).toHaveLength(4);
-      expect(res.body.data[0].action).toBe('registration.create');
-      expect(res.body.data[3].action).toBe('event.create');
+      expect(res.body.data).toHaveLength(6);
+      // The 2 notification.email rows are written after registration.create,
+      // so they lead the newest-first feed (their order between themselves is
+      // nondeterministic — the queue worker sends them independently).
+      expect(res.body.data[0].action).toBe('notification.email');
+      expect(res.body.data[1].action).toBe('notification.email');
+      expect(res.body.data[2].action).toBe('registration.create');
+      expect(res.body.data[5].action).toBe('event.create');
       expect(res.body.data[0].metadata).not.toBeNull();
       expect(typeof res.body.data[0].metadata).toBe('object');
     });
@@ -81,8 +100,8 @@ describe('Audit log query (e2e)', () => {
       const afterRes = await request(app.getHttpServer())
         .get(`/organizations/${orgId}/audit-logs?from=${encodeURIComponent(midpoint)}`)
         .set('Authorization', `Bearer ${presToken}`).expect(200);
-      expect(afterRes.body.total).toBe(2);
-      expect(afterRes.body.data.map((r: { action: string }) => r.action).sort()).toEqual(['event.create', 'registration.create']);
+      expect(afterRes.body.total).toBe(4);
+      expect(afterRes.body.data.map((r: { action: string }) => r.action).sort()).toEqual(['event.create', 'notification.email', 'notification.email', 'registration.create']);
 
       const beforeRes = await request(app.getHttpServer())
         .get(`/organizations/${orgId}/audit-logs?to=${encodeURIComponent(midpoint)}`)
@@ -105,8 +124,8 @@ describe('Audit log query (e2e)', () => {
         .get(`/organizations/${orgId}/audit-logs?page=2&pageSize=2`)
         .set('Authorization', `Bearer ${presToken}`).expect(200);
 
-      expect(page1.body.total).toBe(4);
-      expect(page2.body.total).toBe(4);
+      expect(page1.body.total).toBe(6);
+      expect(page2.body.total).toBe(6);
       expect(page1.body.data).toHaveLength(2);
       expect(page2.body.data).toHaveLength(2);
       const page1Ids = page1.body.data.map((r: { id: string }) => r.id);

@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { AttendanceService } from '../attendance/attendance.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { RegisterDto } from './dto/register.dto';
 import { CURRENT_POLICY_VERSION } from '../pdpa/policy-version';
 
@@ -14,6 +15,7 @@ export class RegistrationsService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly attendance: AttendanceService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async register(
@@ -60,8 +62,9 @@ export class RegistrationsService {
       if (!isConcurrentMembershipCreate) throw error;
     }
 
+    let created;
     try {
-      return await this.prisma.$transaction(async (tx) => {
+      created = await this.prisma.$transaction(async (tx) => {
         // Serialize registrations per event: without this row lock the
         // count-then-create below is racy at READ COMMITTED and concurrent
         // registrants can overshoot capacity. (Template-literal $queryRaw is
@@ -114,6 +117,15 @@ export class RegistrationsService {
       }
       throw error;
     }
+
+    if (created.status === 'APPROVED') {
+      await this.notifications.enqueueRegistrationApproved(organizationId, created.id);
+    } else {
+      await this.notifications.enqueueRegistrationWaitlisted(organizationId, created.id);
+    }
+    await this.notifications.enqueueNewRegistrationForCommittee(organizationId, created.id);
+
+    return created;
   }
 
   private p2002Targets(error: Prisma.PrismaClientKnownRequestError): string[] {
@@ -154,11 +166,20 @@ export class RegistrationsService {
     if (current.userId !== actorUserId) {
       throw new ForbiddenException('You can only cancel your own registration');
     }
-    return this.resolve(organizationId, registrationId, 'CANCELLED', 'registration.cancel', actorUserId);
+    const { updated, promotedRegistrationId } = await this.resolve(organizationId, registrationId, 'CANCELLED', 'registration.cancel', actorUserId);
+    if (promotedRegistrationId) {
+      await this.notifications.enqueueRegistrationPromoted(organizationId, promotedRegistrationId);
+    }
+    return updated;
   }
 
-  reject(organizationId: string, registrationId: string, actorUserId?: string) {
-    return this.resolve(organizationId, registrationId, 'REJECTED', 'registration.reject', actorUserId);
+  async reject(organizationId: string, registrationId: string, actorUserId?: string) {
+    const { updated, promotedRegistrationId } = await this.resolve(organizationId, registrationId, 'REJECTED', 'registration.reject', actorUserId);
+    await this.notifications.enqueueRegistrationRejected(organizationId, registrationId);
+    if (promotedRegistrationId) {
+      await this.notifications.enqueueRegistrationPromoted(organizationId, promotedRegistrationId);
+    }
+    return updated;
   }
 
   private async resolve(
@@ -170,6 +191,7 @@ export class RegistrationsService {
   ) {
     try {
       return await this.prisma.$transaction(async (tx) => {
+        let promotedRegistrationId: string | null = null;
         const current = await tx.registration.findFirst({ where: { id: registrationId, organizationId } });
         if (!current) throw new NotFoundException('Registration not found in this organization');
         if (current.status === 'REJECTED' || current.status === 'CANCELLED') {
@@ -214,6 +236,7 @@ export class RegistrationsService {
               data: { status: 'APPROVED' },
             });
             if (count === 1) {
+              promotedRegistrationId = candidate.id;
               await this.attendance.createForRegistration(tx, {
                 registrationId: candidate.id, eventId: current.eventId, organizationId,
               });
@@ -230,7 +253,7 @@ export class RegistrationsService {
           }
         }
 
-        return updated;
+        return { updated, promotedRegistrationId };
       });
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
