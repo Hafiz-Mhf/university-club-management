@@ -12,6 +12,7 @@ import { CertificatesModule } from './certificates/certificates.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { PdpaModule } from './pdpa/pdpa.module';
 import { AnalyticsModule } from './analytics/analytics.module';
+import { FilesModule } from './files/files.module';
 import { envValidationSchema } from './config/env.validation';
 
 @Module({
@@ -29,6 +30,7 @@ import { envValidationSchema } from './config/env.validation';
     DashboardModule,
     PdpaModule,
     AnalyticsModule,
+    FilesModule,
   ],
 })
 export class AppModule {}

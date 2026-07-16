@@ -161,6 +161,27 @@ issuance from `CertificatesService.findMine`/`download`. One row per
 issuance, not per unique downloader — a certificate downloaded five times
 by the same person is five rows.
 
+### OrgFile (shipped)
+| Field | Type | Notes |
+|-------|------|-------|
+| id | uuid (PK) | |
+| organizationId | uuid (FK → Organization) | |
+| title | string | user-provided label, distinct from the original filename |
+| category | enum (`SOP`, `REPORT`, `FINANCIAL`, `MEETING`, `OTHER`) | display/filter tag, not an access-control boundary |
+| storageKey | string | `org-files/{organizationId}/{randomUUID()}.{ext}` — unique per upload, never reused or overwritten |
+| originalFilename | string | as submitted by the uploader |
+| mimeType | string | validated against a fixed allowlist at upload time |
+| fileSizeBytes | int | counted toward the org's shared storage quota alongside `Certificate.fileSizeBytes` |
+| uploadedByUserId | uuid | plain column, no FK relation (matches `Certificate.uploadedByUserId`'s convention) |
+| createdAt | timestamp | |
+| — | `@@index([organizationId])`, `@@index([organizationId, category])` | |
+
+`OrgFile` **is** in `TENANT_SCOPED_MODELS` (unlike `CertificateDownload`) —
+list/filter reads against it are genuine `findMany` calls the tenant-scope
+middleware is meant to guard. No version history: re-uploading a "new
+version" of a document creates a brand-new row; the old row must be
+explicitly deleted if only one copy should remain visible.
+
 ### ConsentRecord (PDPA) (shipped)
 | Field | Type | Notes |
 |-------|------|-------|

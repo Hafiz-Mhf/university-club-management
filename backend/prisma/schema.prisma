@@ -52,6 +52,14 @@ enum AttendanceStatus {
   ABSENT
 }
 
+enum FileCategory {
+  SOP
+  REPORT
+  FINANCIAL
+  MEETING
+  OTHER
+}
+
 model User {
   id           String       @id @default(uuid())
   email        String       @unique
@@ -93,6 +101,7 @@ model Organization {
   settings       Json?
   memberships    Membership[]
   events         Event[]
+  files          OrgFile[]
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 }
@@ -213,6 +222,23 @@ model Certificate {
 
   @@unique([eventId, userId])
   @@index([organizationId])
+}
+
+model OrgFile {
+  id               String       @id @default(uuid())
+  organizationId   String
+  organization     Organization @relation(fields: [organizationId], references: [id])
+  title            String
+  category         FileCategory
+  storageKey       String
+  originalFilename String
+  mimeType         String
+  fileSizeBytes    Int
+  uploadedByUserId String
+  createdAt        DateTime     @default(now())
+
+  @@index([organizationId])
+  @@index([organizationId, category])
 }
 
 model CertificateDownload {
