@@ -465,6 +465,20 @@ Four routes under `/organizations/:orgId/files*`: `POST` upload, `GET` list, `GE
 
 ---
 
+### As built — meeting minutes (shipped)
+
+Five routes under `/organizations/:orgId/minutes*`: `POST` create, `GET` list, `GET /:minutesId`, `PATCH /:minutesId`, `DELETE /:minutesId`. Create/edit/delete are gated `JwtAuthGuard → TenantGuard → RolesGuard`, `MANAGE_EVENTS` — same tier as Events/Files. List/get-one are gated `JwtAuthGuard → TenantGuard` only — any ACTIVE member, any role.
+
+`attendeeMembershipIds` is validated on every create/update against real `Membership` rows in the target org — an unknown or foreign-org id is rejected with `400`, never silently accepted. Standalone, org-level records — no relation to `Event`.
+
+**Action items are plain text** (`task` + optional `owner`) with no status field — this is a record, not a task tracker.
+
+**List is paginated** (`page`/`pageSize`, default 25/max 100 — same convention as `AuditService.list`), sorted `meetingDate desc`.
+
+**Audit:** three new actions, `minutes.create`, `minutes.update`, `minutes.delete` (`targetType: 'MeetingMinutes'`) — matches `event.create`/`event.update`/`event.delete`'s shape. Reads (list, get-one) are unaudited.
+
+---
+
 ## 3. Multi-Tenant Isolation
 
 - Every tenant-owned row carries `organizationId`.

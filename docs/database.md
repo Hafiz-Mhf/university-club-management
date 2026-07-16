@@ -182,6 +182,29 @@ middleware is meant to guard. No version history: re-uploading a "new
 version" of a document creates a brand-new row; the old row must be
 explicitly deleted if only one copy should remain visible.
 
+### MeetingMinutes (shipped)
+| Field | Type | Notes |
+|-------|------|-------|
+| id | uuid (PK) | |
+| organizationId | uuid (FK → Organization) | |
+| title | string | |
+| meetingDate | timestamp | |
+| attendeeMembershipIds | json | `string[]` of `Membership.id`s, validated against real ACTIVE-org memberships at create/update time |
+| agendaItems | json | `Array<{ topic: string; notes: string }>` |
+| actionItems | json | `Array<{ task: string; owner?: string }>` — no status field, text record only |
+| createdByUserId | uuid | plain column, no FK relation |
+| createdAt | timestamp | |
+| updatedAt | timestamp | |
+| — | `@@index([organizationId])` | |
+
+`MeetingMinutes` **is** in `TENANT_SCOPED_MODELS` (same reasoning as
+`OrgFile`) — the archive/list endpoint issues a genuine org-scoped
+`findMany`. Not tied to `Event` — standalone org-level records. No join
+table for attendees: stored as a validated `Json` array of Membership ids,
+matching the `Json`-for-structured-non-relational-data convention already
+used by `Organization.advisors`/`socialLinks`, `Membership.committeeHistory`,
+and `Registration.answers`.
+
 ### ConsentRecord (PDPA) (shipped)
 | Field | Type | Notes |
 |-------|------|-------|
