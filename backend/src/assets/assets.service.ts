@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CreateAssetDto } from './dto/create-asset.dto';
@@ -30,5 +30,18 @@ export class AssetsService {
       }, tx);
       return asset;
     });
+  }
+
+  list(organizationId: string) {
+    return this.prisma.asset.findMany({
+      where: { organizationId },
+      orderBy: { name: 'asc' },
+    });
+  }
+
+  async findOne(organizationId: string, assetId: string) {
+    const asset = await this.prisma.asset.findFirst({ where: { id: assetId, organizationId } });
+    if (!asset) throw new NotFoundException('Asset not found in this organization');
+    return asset;
   }
 }

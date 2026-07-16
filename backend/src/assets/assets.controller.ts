@@ -1,4 +1,4 @@
-import { Body, Controller, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { AssetsService } from './assets.service';
 import { CreateAssetDto } from './dto/create-asset.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -22,5 +22,17 @@ export class AssetsController {
     @CurrentUser() user: { userId: string },
   ) {
     return this.assets.create(orgId, dto, user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard, TenantGuard)
+  @Get()
+  list(@OrgId() orgId: string) {
+    return this.assets.list(orgId);
+  }
+
+  @UseGuards(JwtAuthGuard, TenantGuard)
+  @Get(':assetId')
+  findOne(@OrgId() orgId: string, @Param('assetId') assetId: string) {
+    return this.assets.findOne(orgId, assetId);
   }
 }
