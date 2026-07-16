@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, Injectable, NotFoundException }
 import { EventStatus, Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { MANAGE_EVENTS } from '../rbac/role-groups';
@@ -11,6 +12,7 @@ export class EventsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async create(organizationId: string, dto: CreateEventDto, actorUserId?: string) {
@@ -66,7 +68,7 @@ export class EventsService {
   }
 
   async update(organizationId: string, eventId: string, dto: UpdateEventDto, actorUserId?: string) {
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const current = await tx.event.findFirst({ where: { id: eventId, organizationId } });
       if (!current) throw new NotFoundException('Event not found in this organization');
       if (current.status === 'COMPLETED' || current.status === 'CANCELLED') {
@@ -94,6 +96,15 @@ export class EventsService {
       }, tx);
       return updated;
     });
+
+    // Reschedules even if the new startAt equals the old one — a harmless
+    // no-op recompute, not worth a deep-equality check.
+    if (dto.startAt && result.status === 'PUBLISHED') {
+      await this.notifications.cancelEventReminder(eventId);
+      await this.notifications.scheduleEventReminder(organizationId, eventId, result.startAt);
+    }
+
+    return result;
   }
 
   private async transition(
@@ -138,26 +149,32 @@ export class EventsService {
     });
   }
 
-  publish(organizationId: string, eventId: string, actorUserId?: string) {
-    return this.transition(
+  async publish(organizationId: string, eventId: string, actorUserId?: string) {
+    const updated = await this.transition(
       organizationId, eventId, 'event.publish', 'PUBLISHED',
       (s) => s === 'DRAFT', actorUserId,
       (e) => { if (e.endAt <= new Date()) throw new ConflictException('Cannot publish a past event'); },
     );
+    await this.notifications.scheduleEventReminder(organizationId, eventId, updated.startAt);
+    return updated;
   }
 
-  complete(organizationId: string, eventId: string, actorUserId?: string) {
-    return this.transition(
+  async complete(organizationId: string, eventId: string, actorUserId?: string) {
+    const updated = await this.transition(
       organizationId, eventId, 'event.complete', 'COMPLETED',
       (s) => s === 'PUBLISHED', actorUserId,
     );
+    await this.notifications.cancelEventReminder(eventId);
+    return updated;
   }
 
-  cancel(organizationId: string, eventId: string, actorUserId?: string) {
-    return this.transition(
+  async cancel(organizationId: string, eventId: string, actorUserId?: string) {
+    const updated = await this.transition(
       organizationId, eventId, 'event.cancel', 'CANCELLED',
       (s) => s === 'DRAFT' || s === 'PUBLISHED', actorUserId,
     );
+    await this.notifications.cancelEventReminder(eventId);
+    return updated;
   }
 
   async remove(organizationId: string, eventId: string, actorUserId?: string): Promise<{ removed: true }> {

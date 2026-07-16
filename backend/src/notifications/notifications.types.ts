@@ -25,6 +25,8 @@ export interface EventReminderJobPayload {
   eventId: string;
 }
 
+// BullMQ rejects custom job ids containing ':' (its Redis key separator),
+// so this deliberately deviates from the spec's `reminder:<eventId>`.
 export function reminderJobId(eventId: string): string {
-  return `reminder:${eventId}`;
+  return `reminder-${eventId}`;
 }
