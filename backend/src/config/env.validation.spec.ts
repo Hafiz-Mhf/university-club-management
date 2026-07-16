@@ -13,6 +13,12 @@ describe('envValidationSchema', () => {
     expect(error).toBeUndefined();
     expect(value.JWT_ACCESS_TTL).toBe('900s');
     expect(value.PORT).toBe(3001);
+    expect(value.REDIS_URL).toBe('redis://localhost:6379');
+    expect(value.MAIL_HOST).toBe('localhost');
+    expect(value.MAIL_PORT).toBe(1025);
+    expect(value.MAIL_USER).toBe('');
+    expect(value.MAIL_PASS).toBe('');
+    expect(value.MAIL_FROM).toBe('University Club Platform <no-reply@ucm.local>');
   });
 
   it('rejects a missing JWT_ACCESS_SECRET', () => {

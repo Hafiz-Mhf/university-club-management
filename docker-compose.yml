@@ -26,6 +26,11 @@ services:
       - "6379:6379"
     volumes:
       - redisdata:/data
+  mailpit:
+    image: axllent/mailpit
+    ports:
+      - "1025:1025"
+      - "8025:8025"
 volumes:
   pgdata:
   miniodata:
