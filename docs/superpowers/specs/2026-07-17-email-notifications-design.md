@@ -86,17 +86,19 @@ notifications/
   re-fetches the current `User.email`/`Event.title` at send time, so a
   changed email or renamed event before the job runs is reflected correctly
   and no PII sits in the Redis job payload longer than necessary.
-- **`NotificationsProcessor`** (`@Processor('notifications')`): one
-  `@Process(kind)` handler per job kind. Each handler: (1) re-fetches the
-  data it needs via Prisma, (2) builds `{subject, text}` via `templates.ts`,
-  (3) calls `MailerService.sendMail`, (4) on success, calls
-  `AuditService.record({ organizationId, action: 'notification.email',
-  targetType, targetId, metadata: { kind } })` — no email address or body in
-  the metadata. On failure, throws (BullMQ retries with default backoff);
-  after retries exhaust, BullMQ marks the job failed and it's visible via
-  Redis/Bull Board-style inspection if ever added — no audit row for a
-  failure, matching "audit successful sensitive actions" precedent (no
-  existing feature audits failed attempts either).
+- **`NotificationsProcessor`** (`@Processor('notifications')`, extends
+  `@nestjs/bullmq`'s `WorkerHost` — a single `process(job)` method that
+  switches on `job.name`, not a `@Process(kind)` handler per kind; that
+  decorator belongs to the older `@nestjs/bull`/Bull API, not BullMQ). For
+  each job: (1) re-fetches the data it needs via Prisma, (2) builds
+  `{subject, text}` via `templates.ts`, (3) calls `MailerService.sendMail`,
+  (4) on success, calls `AuditService.record({ organizationId, action:
+  'notification.email', targetType, targetId, metadata: { kind } })` — no
+  email address or body in the metadata. On failure, throws (BullMQ retries
+  with default backoff); after retries exhaust, an `@OnWorkerEvent('failed')`
+  hook logs via Nest's `Logger` — no audit row for a failure, matching
+  "audit successful sensitive actions" precedent (no existing feature
+  audits failed attempts either).
 - **`MailerService`**: `nodemailer.createTransport({ host, port, auth })`
   from env. Dev points at a new `mailpit` container (no auth). Prod reads
   real SMTP creds from env — same client code path either way.
