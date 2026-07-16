@@ -48,8 +48,9 @@ export class CertificatesController {
     @OrgId() orgId: string,
     @Param('eventId') eventId: string,
     @Param('certificateId') certificateId: string,
+    @CurrentUser() user: { userId: string },
   ) {
-    return this.certificates.download(orgId, eventId, certificateId);
+    return this.certificates.download(orgId, eventId, certificateId, user.userId);
   }
 
   @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)

@@ -11,6 +11,7 @@ import { AttendanceModule } from './attendance/attendance.module';
 import { CertificatesModule } from './certificates/certificates.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { PdpaModule } from './pdpa/pdpa.module';
+import { AnalyticsModule } from './analytics/analytics.module';
 import { envValidationSchema } from './config/env.validation';
 
 @Module({
@@ -27,6 +28,7 @@ import { envValidationSchema } from './config/env.validation';
     CertificatesModule,
     DashboardModule,
     PdpaModule,
+    AnalyticsModule,
   ],
 })
 export class AppModule {}

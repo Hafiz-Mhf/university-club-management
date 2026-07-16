@@ -146,6 +146,21 @@ key. Per-org storage quota is enforced with a live
 than a running counter on `Organization`; certificate volumes are small (one
 row per person per event) so the aggregate is cheap and never drifts.
 
+### CertificateDownload (shipped)
+| Field | Type | Notes |
+|-------|------|-------|
+| id | uuid (PK) | |
+| certificateId | uuid (FK → Certificate) | |
+| userId | uuid | the downloading actor — participant self-download or committee download-by-id; plain column, no FK relation (matches `Certificate.uploadedByUserId`'s convention) |
+| downloadedAt | timestamp | |
+| — | `@@index([certificateId])` | |
+
+Not a tenant-scoped model — queried through `certificate: { organizationId }`
+(a relation filter), written by known `certificateId` on every signed-URL
+issuance from `CertificatesService.findMine`/`download`. One row per
+issuance, not per unique downloader — a certificate downloaded five times
+by the same person is five rows.
+
 ### ConsentRecord (PDPA) (shipped)
 | Field | Type | Notes |
 |-------|------|-------|

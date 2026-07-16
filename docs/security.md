@@ -433,6 +433,24 @@ for MFA (schema-ready, deferred until the MFA feature ships).
 
 ---
 
+### As built — analytics (shipped)
+
+**Five read endpoints**, all under `GET /organizations/:orgId/analytics/*`: `overview`, `trends`, `demographics`, `certificates`, `committee-activity`. Every route is gated `JwtAuthGuard → TenantGuard → RolesGuard`, `@Roles(...MANAGE_EVENTS)` — the same tier as the existing Dashboard endpoint (President, Vice President, Secretary, Treasurer, Event Director, Committee). No new permission tier introduced.
+
+**Attendance rate** (`overview`): `PRESENT / (PRESENT + ABSENT)` across all `Attendance` rows in the org, all-time. Rows still `REGISTERED` (event not yet resolved) are excluded from both numerator and denominator. `null` (not `0` or `NaN`) when there are zero resolved rows.
+
+**`days` query parameter** (`trends`, `committee-activity`): optional, defaults to `30`. Non-numeric or non-positive values silently default to `30` — never `400`s, since this is a reporting window, not a security-sensitive filter. Clamped to `[1, 365]` to bound query cost.
+
+**Demographics** returns aggregate counts only — `groupBy` on `Membership.faculty`/`Membership.programme` for `ACTIVE` memberships, never a member list and never any identifying field (userId, fullName) alongside the faculty/programme breakdown. This combination is demographic/PII-adjacent data; exposing it only as counts is the least-exposure design.
+
+**Committee activity** groups `AuditLog` rows in the window by `actorUserId`, joined to that actor's *current* `Membership` in the org for `fullName`/`role` display. An actor who has since left the org (no current Membership row) is excluded entirely — dropped, not shown with placeholder data. A member with zero audit actions in the window simply doesn't appear (not zero-filled, unlike the daily trend buckets).
+
+**`CertificateDownload` tracking:** a row is written on every signed-URL issuance — both `CertificatesService.findMine` (participant self-download) and `download` (committee download-by-id, now carrying `actorUserId` from `@CurrentUser`). The write is best-effort: wrapped in its own try/catch, logged on failure, and never blocks the download response — by the time it runs, a valid signed URL has already been minted and is about to be returned.
+
+**No new audit action.** All five reads are unaudited, matching the existing `GET /dashboard` and audit-logs-list precedent. The `CertificateDownload` insert is a metrics row, not an audit entry — downloading a certificate is already implicitly covered by the existing `certificate.upload`/`certificate.delete` audit actions on the write side.
+
+---
+
 ## 3. Multi-Tenant Isolation
 
 - Every tenant-owned row carries `organizationId`.
