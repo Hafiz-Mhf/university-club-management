@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CreateMinutesDto } from './dto/create-minutes.dto';
@@ -44,5 +44,27 @@ export class MinutesService {
       }, tx);
       return minutes;
     });
+  }
+
+  async list(organizationId: string, page?: string, pageSize?: string) {
+    const pageNum = Math.max(1, Number(page) || 1);
+    const size = Math.min(100, Math.max(1, Number(pageSize) || 25));
+
+    const [data, total] = await Promise.all([
+      this.prisma.meetingMinutes.findMany({
+        where: { organizationId },
+        orderBy: { meetingDate: 'desc' },
+        skip: (pageNum - 1) * size,
+        take: size,
+      }),
+      this.prisma.meetingMinutes.count({ where: { organizationId } }),
+    ]);
+    return { data, total, page: pageNum, pageSize: size };
+  }
+
+  async findOne(organizationId: string, minutesId: string) {
+    const minutes = await this.prisma.meetingMinutes.findFirst({ where: { id: minutesId, organizationId } });
+    if (!minutes) throw new NotFoundException('Minutes not found in this organization');
+    return minutes;
   }
 }

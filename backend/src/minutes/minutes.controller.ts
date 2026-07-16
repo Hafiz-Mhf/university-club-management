@@ -1,4 +1,4 @@
-import { Body, Controller, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { MinutesService } from './minutes.service';
 import { CreateMinutesDto } from './dto/create-minutes.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -22,5 +22,17 @@ export class MinutesController {
     @CurrentUser() user: { userId: string },
   ) {
     return this.minutes.create(orgId, dto, user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard, TenantGuard)
+  @Get()
+  list(@OrgId() orgId: string, @Query('page') page?: string, @Query('pageSize') pageSize?: string) {
+    return this.minutes.list(orgId, page, pageSize);
+  }
+
+  @UseGuards(JwtAuthGuard, TenantGuard)
+  @Get(':minutesId')
+  findOne(@OrgId() orgId: string, @Param('minutesId') minutesId: string) {
+    return this.minutes.findOne(orgId, minutesId);
   }
 }
