@@ -1,4 +1,4 @@
-import { Body, Controller, Post, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { GalleryService } from './gallery.service';
 import { UploadPhotoDto } from './dto/upload-photo.dto';
@@ -25,5 +25,18 @@ export class GalleryController {
     @CurrentUser() user: { userId: string },
   ) {
     return this.gallery.upload(orgId, dto.caption, file, user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard, TenantGuard)
+  @Get()
+  list(@OrgId() orgId: string) {
+    return this.gallery.list(orgId);
+  }
+
+  @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
+  @Roles(...MANAGE_EVENTS)
+  @Delete(':photoId')
+  remove(@OrgId() orgId: string, @Param('photoId') photoId: string, @CurrentUser() user: { userId: string }) {
+    return this.gallery.remove(orgId, photoId, user.userId);
   }
 }

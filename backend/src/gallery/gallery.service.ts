@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
@@ -58,5 +58,35 @@ export class GalleryService {
       }, tx);
       return photo;
     });
+  }
+
+  async list(organizationId: string) {
+    const photos = await this.prisma.galleryPhoto.findMany({
+      where: { organizationId },
+      orderBy: { createdAt: 'desc' },
+    });
+    return Promise.all(photos.map(async (photo) => ({
+      id: photo.id,
+      caption: photo.caption,
+      downloadUrl: await this.storage.getSignedDownloadUrl(photo.storageKey, SIGNED_URL_TTL_SECONDS),
+      createdAt: photo.createdAt,
+    })));
+  }
+
+  async remove(organizationId: string, photoId: string, actorUserId: string): Promise<{ removed: true }> {
+    const photo = await this.prisma.galleryPhoto.findFirst({ where: { id: photoId, organizationId } });
+    if (!photo) throw new NotFoundException('Photo not found in this organization');
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.galleryPhoto.delete({ where: { id: photoId } });
+      await this.audit.record({
+        organizationId, actorUserId, action: 'gallery.delete',
+        targetType: 'GalleryPhoto', targetId: photoId,
+        metadata: { photoId, caption: photo.caption },
+      }, tx);
+    });
+
+    await this.storage.deleteObject(photo.storageKey);
+    return { removed: true as const };
   }
 }
