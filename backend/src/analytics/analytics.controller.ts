@@ -1,5 +1,6 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { AnalyticsService } from './analytics.service';
+import { parseDaysParam } from './date-window.util';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { TenantGuard } from '../tenancy/tenant.guard';
 import { RolesGuard } from '../rbac/roles.guard';
@@ -23,5 +24,12 @@ export class AnalyticsController {
   @Get('certificates')
   getCertificates(@OrgId() orgId: string) {
     return this.analytics.getCertificates(orgId);
+  }
+
+  @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
+  @Roles(...MANAGE_EVENTS)
+  @Get('trends')
+  getTrends(@OrgId() orgId: string, @Query('days') daysRaw?: string) {
+    return this.analytics.getTrends(orgId, parseDaysParam(daysRaw));
   }
 }
