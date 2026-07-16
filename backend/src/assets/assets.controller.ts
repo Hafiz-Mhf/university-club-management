@@ -1,6 +1,7 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { AssetsService } from './assets.service';
 import { CreateAssetDto } from './dto/create-asset.dto';
+import { UpdateAssetDto } from './dto/update-asset.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { TenantGuard } from '../tenancy/tenant.guard';
 import { RolesGuard } from '../rbac/roles.guard';
@@ -34,5 +35,24 @@ export class AssetsController {
   @Get(':assetId')
   findOne(@OrgId() orgId: string, @Param('assetId') assetId: string) {
     return this.assets.findOne(orgId, assetId);
+  }
+
+  @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
+  @Roles(...MANAGE_EVENTS)
+  @Patch(':assetId')
+  update(
+    @OrgId() orgId: string,
+    @Param('assetId') assetId: string,
+    @Body() dto: UpdateAssetDto,
+    @CurrentUser() user: { userId: string },
+  ) {
+    return this.assets.update(orgId, assetId, dto, user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
+  @Roles(...MANAGE_EVENTS)
+  @Delete(':assetId')
+  remove(@OrgId() orgId: string, @Param('assetId') assetId: string, @CurrentUser() user: { userId: string }) {
+    return this.assets.remove(orgId, assetId, user.userId);
   }
 }
