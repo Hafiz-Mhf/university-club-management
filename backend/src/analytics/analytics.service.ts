@@ -67,4 +67,54 @@ export class AnalyticsService {
 
     return { registrationTrend, memberGrowth };
   }
+
+  async getDemographics(organizationId: string) {
+    const [facultyGroups, programmeGroups] = await Promise.all([
+      this.prisma.membership.groupBy({
+        by: ['faculty'],
+        where: { organizationId, status: 'ACTIVE' },
+        _count: { _all: true },
+      }),
+      this.prisma.membership.groupBy({
+        by: ['programme'],
+        where: { organizationId, status: 'ACTIVE' },
+        _count: { _all: true },
+      }),
+    ]);
+    return {
+      faculty: facultyGroups.map((g) => ({ value: g.faculty, count: g._count._all })),
+      programme: programmeGroups.map((g) => ({ value: g.programme, count: g._count._all })),
+    };
+  }
+
+  async getCommitteeActivity(organizationId: string, days: number) {
+    const since = windowStart(days);
+    const grouped = await this.prisma.auditLog.groupBy({
+      by: ['actorUserId'],
+      where: { organizationId, createdAt: { gte: since }, actorUserId: { not: null } },
+      _count: { _all: true },
+    });
+
+    const userIds = grouped
+      .map((g) => g.actorUserId)
+      .filter((id): id is string => id !== null);
+    const memberships = await this.prisma.membership.findMany({
+      where: { organizationId, userId: { in: userIds } },
+      select: { userId: true, role: true, user: { select: { fullName: true } } },
+    });
+    const byUserId = new Map(memberships.map((m) => [m.userId, m]));
+
+    // A user with a current Membership in this org is included; an actor
+    // who has since left (no Membership row) has nothing to attribute a
+    // name/role to, and is dropped rather than shown with placeholder data.
+    const data = grouped
+      .filter((g) => g.actorUserId !== null && byUserId.has(g.actorUserId))
+      .map((g) => {
+        const m = byUserId.get(g.actorUserId!)!;
+        return { userId: g.actorUserId!, fullName: m.user.fullName, role: m.role, actionCount: g._count._all };
+      })
+      .sort((a, b) => b.actionCount - a.actionCount);
+
+    return { data };
+  }
 }
