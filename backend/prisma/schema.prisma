@@ -60,6 +60,12 @@ enum FileCategory {
   OTHER
 }
 
+enum AssetCondition {
+  GOOD
+  DAMAGED
+  LOST
+}
+
 model User {
   id           String       @id @default(uuid())
   email        String       @unique
@@ -103,6 +109,7 @@ model Organization {
   events         Event[]
   files          OrgFile[]
   minutes        MeetingMinutes[]
+  assets         Asset[]
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 }
@@ -254,6 +261,22 @@ model MeetingMinutes {
   createdByUserId       String
   createdAt             DateTime     @default(now())
   updatedAt             DateTime     @updatedAt
+
+  @@index([organizationId])
+}
+
+model Asset {
+  id              String         @id @default(uuid())
+  organizationId  String
+  organization    Organization   @relation(fields: [organizationId], references: [id])
+  name            String
+  quantity        Int
+  condition       AssetCondition @default(GOOD)
+  location        String?
+  notes           String?
+  createdByUserId String
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 
   @@index([organizationId])
 }
