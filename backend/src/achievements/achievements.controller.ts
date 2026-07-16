@@ -1,6 +1,7 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { AchievementsService } from './achievements.service';
 import { CreateAchievementDto } from './dto/create-achievement.dto';
+import { UpdateAchievementDto } from './dto/update-achievement.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { TenantGuard } from '../tenancy/tenant.guard';
 import { RolesGuard } from '../rbac/roles.guard';
@@ -34,5 +35,24 @@ export class AchievementsController {
   @Get(':achievementId')
   findOne(@OrgId() orgId: string, @Param('achievementId') achievementId: string) {
     return this.achievements.findOne(orgId, achievementId);
+  }
+
+  @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
+  @Roles(...MANAGE_EVENTS)
+  @Patch(':achievementId')
+  update(
+    @OrgId() orgId: string,
+    @Param('achievementId') achievementId: string,
+    @Body() dto: UpdateAchievementDto,
+    @CurrentUser() user: { userId: string },
+  ) {
+    return this.achievements.update(orgId, achievementId, dto, user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
+  @Roles(...MANAGE_EVENTS)
+  @Delete(':achievementId')
+  remove(@OrgId() orgId: string, @Param('achievementId') achievementId: string, @CurrentUser() user: { userId: string }) {
+    return this.achievements.remove(orgId, achievementId, user.userId);
   }
 }
