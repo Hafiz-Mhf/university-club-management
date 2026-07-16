@@ -1,6 +1,7 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { MinutesService } from './minutes.service';
 import { CreateMinutesDto } from './dto/create-minutes.dto';
+import { UpdateMinutesDto } from './dto/update-minutes.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { TenantGuard } from '../tenancy/tenant.guard';
 import { RolesGuard } from '../rbac/roles.guard';
@@ -34,5 +35,24 @@ export class MinutesController {
   @Get(':minutesId')
   findOne(@OrgId() orgId: string, @Param('minutesId') minutesId: string) {
     return this.minutes.findOne(orgId, minutesId);
+  }
+
+  @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
+  @Roles(...MANAGE_EVENTS)
+  @Patch(':minutesId')
+  update(
+    @OrgId() orgId: string,
+    @Param('minutesId') minutesId: string,
+    @Body() dto: UpdateMinutesDto,
+    @CurrentUser() user: { userId: string },
+  ) {
+    return this.minutes.update(orgId, minutesId, dto, user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
+  @Roles(...MANAGE_EVENTS)
+  @Delete(':minutesId')
+  remove(@OrgId() orgId: string, @Param('minutesId') minutesId: string, @CurrentUser() user: { userId: string }) {
+    return this.minutes.remove(orgId, minutesId, user.userId);
   }
 }

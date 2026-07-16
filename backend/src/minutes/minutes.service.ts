@@ -1,7 +1,9 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CreateMinutesDto } from './dto/create-minutes.dto';
+import { UpdateMinutesDto } from './dto/update-minutes.dto';
 
 @Injectable()
 export class MinutesService {
@@ -66,5 +68,46 @@ export class MinutesService {
     const minutes = await this.prisma.meetingMinutes.findFirst({ where: { id: minutesId, organizationId } });
     if (!minutes) throw new NotFoundException('Minutes not found in this organization');
     return minutes;
+  }
+
+  async update(organizationId: string, minutesId: string, dto: UpdateMinutesDto, actorUserId: string) {
+    if (dto.attendeeMembershipIds) {
+      await this.validateAttendees(organizationId, dto.attendeeMembershipIds);
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const current = await tx.meetingMinutes.findFirst({ where: { id: minutesId, organizationId } });
+      if (!current) throw new NotFoundException('Minutes not found in this organization');
+
+      const data: Prisma.MeetingMinutesUpdateInput = {
+        title: dto.title,
+        meetingDate: dto.meetingDate ? new Date(dto.meetingDate) : undefined,
+        attendeeMembershipIds: dto.attendeeMembershipIds as any,
+        agendaItems: dto.agendaItems as any,
+        actionItems: dto.actionItems as any,
+      };
+      const fields = Object.keys(data).filter((k) => (data as Record<string, unknown>)[k] !== undefined);
+
+      const updated = await tx.meetingMinutes.update({ where: { id: minutesId, organizationId }, data });
+      await this.audit.record({
+        organizationId, actorUserId, action: 'minutes.update',
+        targetType: 'MeetingMinutes', targetId: minutesId, metadata: { minutesId, fields },
+      }, tx);
+      return updated;
+    });
+  }
+
+  async remove(organizationId: string, minutesId: string, actorUserId: string): Promise<{ removed: true }> {
+    return this.prisma.$transaction(async (tx) => {
+      const current = await tx.meetingMinutes.findFirst({ where: { id: minutesId, organizationId } });
+      if (!current) throw new NotFoundException('Minutes not found in this organization');
+      await tx.meetingMinutes.delete({ where: { id: minutesId, organizationId } });
+      await this.audit.record({
+        organizationId, actorUserId, action: 'minutes.delete',
+        targetType: 'MeetingMinutes', targetId: minutesId,
+        metadata: { minutesId, title: current.title },
+      }, tx);
+      return { removed: true as const };
+    });
   }
 }
