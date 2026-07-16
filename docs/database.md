@@ -225,6 +225,38 @@ and `Registration.answers`.
 row per asset type, not one row per physical item. List is unpaginated
 (bounded inventory, unlike the Meeting Minutes archive), sorted `name asc`.
 
+### GalleryPhoto (shipped)
+| Field | Type | Notes |
+|-------|------|-------|
+| id | uuid (PK) | |
+| organizationId | uuid (FK → Organization) | |
+| storageKey | string | `gallery/{organizationId}/{randomUUID()}.{ext}` |
+| caption | string? | |
+| fileSizeBytes | int | counted toward the org's shared storage quota alongside `Certificate.fileSizeBytes` and `OrgFile.fileSizeBytes` |
+| uploadedByUserId | uuid | plain column, no FK relation |
+| createdAt | timestamp | |
+| — | `@@index([organizationId])` | |
+
+No edit endpoint — caption changes are delete + re-upload. List embeds a
+signed `downloadUrl` per photo (unlike `OrgFile`'s list, which is
+metadata-only) since a gallery exists to render a grid of images, not to
+be browsed then fetched one at a time.
+
+### Achievement (shipped)
+| Field | Type | Notes |
+|-------|------|-------|
+| id | uuid (PK) | |
+| organizationId | uuid (FK → Organization) | |
+| title | string | |
+| description | string | |
+| year | int | no range bound |
+| createdByUserId | uuid | plain column, no FK relation |
+| createdAt | timestamp | |
+| updatedAt | timestamp | |
+| — | `@@index([organizationId])` | |
+
+Both `GalleryPhoto` and `Achievement` are in `TENANT_SCOPED_MODELS`.
+
 ### ConsentRecord (PDPA) (shipped)
 | Field | Type | Notes |
 |-------|------|-------|
