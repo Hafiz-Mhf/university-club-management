@@ -451,6 +451,20 @@ for MFA (schema-ready, deferred until the MFA feature ships).
 
 ---
 
+### As built — file repository (shipped)
+
+Four routes under `/organizations/:orgId/files*`: `POST` upload, `GET` list, `GET /:fileId/download`, `DELETE /:fileId`. Upload and delete are gated `JwtAuthGuard → TenantGuard → RolesGuard`, `MANAGE_EVENTS` — same tier as Certificates/Events. List and download are gated `JwtAuthGuard → TenantGuard` only — any ACTIVE member of the org, any role, can view and download.
+
+**Validation:** allowed MIME types are PDF, DOCX, XLSX, PPTX, PNG, JPEG — anything else is `400`. Max file size 20MB. Storage quota is shared with Certificates: every upload sums `Certificate.fileSizeBytes` and `OrgFile.fileSizeBytes` against `Organization.storageQuotaMb` before writing; exceeding it is `400`.
+
+**No download tracking** for org files (unlike `CertificateDownload`) — out of scope this phase.
+
+**Audit:** two new actions, `file.upload` and `file.delete` (`targetType: 'OrgFile'`). Reads (list, download) are unaudited, matching the Dashboard/Analytics precedent.
+
+**No per-category access control** — `category` is a display/filter tag only, not a permission boundary.
+
+---
+
 ## 3. Multi-Tenant Isolation
 
 - Every tenant-owned row carries `organizationId`.
