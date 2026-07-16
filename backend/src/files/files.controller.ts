@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Query, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { FilesService } from './files.service';
 import { UploadFileDto } from './dto/upload-file.dto';
@@ -37,5 +37,16 @@ export class FilesController {
   @Get(':fileId/download')
   download(@OrgId() orgId: string, @Param('fileId') fileId: string) {
     return this.files.getDownloadUrl(orgId, fileId);
+  }
+
+  @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
+  @Roles(...MANAGE_EVENTS)
+  @Delete(':fileId')
+  remove(
+    @OrgId() orgId: string,
+    @Param('fileId') fileId: string,
+    @CurrentUser() user: { userId: string },
+  ) {
+    return this.files.remove(orgId, fileId, user.userId);
   }
 }

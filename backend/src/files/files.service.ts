@@ -98,4 +98,24 @@ export class FilesService {
     const downloadUrl = await this.storage.getSignedDownloadUrl(orgFile.storageKey, SIGNED_URL_TTL_SECONDS);
     return { downloadUrl };
   }
+
+  async remove(organizationId: string, fileId: string, actorUserId: string) {
+    const orgFile = await this.prisma.orgFile.findFirst({ where: { id: fileId, organizationId } });
+    if (!orgFile) throw new NotFoundException('File not found in this organization');
+
+    // DB-first ordering: a failed storage delete after commit leaves only an
+    // orphaned MinIO object nothing references — harmless. Reverse order
+    // could leave a DB row pointing at a deleted object.
+    await this.prisma.$transaction(async (tx) => {
+      await tx.orgFile.delete({ where: { id: fileId } });
+      await this.audit.record({
+        organizationId, actorUserId, action: 'file.delete',
+        targetType: 'OrgFile', targetId: fileId,
+        metadata: { fileId, title: orgFile.title, category: orgFile.category },
+      }, tx);
+    });
+
+    await this.storage.deleteObject(orgFile.storageKey);
+    return { removed: true as const };
+  }
 }
