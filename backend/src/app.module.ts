@@ -14,6 +14,7 @@ import { PdpaModule } from './pdpa/pdpa.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { FilesModule } from './files/files.module';
 import { MinutesModule } from './minutes/minutes.module';
+import { AssetsModule } from './assets/assets.module';
 import { envValidationSchema } from './config/env.validation';
 
 @Module({
@@ -33,6 +34,7 @@ import { envValidationSchema } from './config/env.validation';
     AnalyticsModule,
     FilesModule,
     MinutesModule,
+    AssetsModule,
   ],
 })
 export class AppModule {}
