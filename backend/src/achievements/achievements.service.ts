@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CreateAchievementDto } from './dto/create-achievement.dto';
@@ -25,5 +25,18 @@ export class AchievementsService {
       }, tx);
       return achievement;
     });
+  }
+
+  list(organizationId: string) {
+    return this.prisma.achievement.findMany({
+      where: { organizationId },
+      orderBy: { year: 'desc' },
+    });
+  }
+
+  async findOne(organizationId: string, achievementId: string) {
+    const achievement = await this.prisma.achievement.findFirst({ where: { id: achievementId, organizationId } });
+    if (!achievement) throw new NotFoundException('Achievement not found in this organization');
+    return achievement;
   }
 }

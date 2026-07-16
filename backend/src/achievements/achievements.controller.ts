@@ -1,4 +1,4 @@
-import { Body, Controller, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { AchievementsService } from './achievements.service';
 import { CreateAchievementDto } from './dto/create-achievement.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -22,5 +22,17 @@ export class AchievementsController {
     @CurrentUser() user: { userId: string },
   ) {
     return this.achievements.create(orgId, dto, user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard, TenantGuard)
+  @Get()
+  list(@OrgId() orgId: string) {
+    return this.achievements.list(orgId);
+  }
+
+  @UseGuards(JwtAuthGuard, TenantGuard)
+  @Get(':achievementId')
+  findOne(@OrgId() orgId: string, @Param('achievementId') achievementId: string) {
+    return this.achievements.findOne(orgId, achievementId);
   }
 }
