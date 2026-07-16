@@ -16,6 +16,7 @@ import { FilesModule } from './files/files.module';
 import { MinutesModule } from './minutes/minutes.module';
 import { AssetsModule } from './assets/assets.module';
 import { GalleryModule } from './gallery/gallery.module';
+import { AchievementsModule } from './achievements/achievements.module';
 import { envValidationSchema } from './config/env.validation';
 
 @Module({
@@ -37,6 +38,7 @@ import { envValidationSchema } from './config/env.validation';
     MinutesModule,
     AssetsModule,
     GalleryModule,
+    AchievementsModule,
   ],
 })
 export class AppModule {}
