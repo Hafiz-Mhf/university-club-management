@@ -563,6 +563,18 @@ New model: `FeedbackResponse`, added to `TENANT_SCOPED_MODELS`. New column: `Eve
 
 ---
 
+### As built — committee handover pack (shipped)
+
+New `backend/src/handover/` module, one endpoint: `GET /organizations/:orgId/handover` (`MANAGE_EVENTS`). Generates a multi-page PDF on demand and streams it back (`StreamableFile`, `Content-Type: application/pdf`) — nothing is persisted, no new Prisma model or column, no storage-quota interaction.
+
+`HandoverService` aggregates five sections with direct Prisma queries scoped to `organizationId` — same cross-cutting-read pattern `AnalyticsService` already uses (no other feature module imported): every `ACTIVE` `Membership` (name, current role, and the `committeeHistory` JSON array already written by `MembershipsService.changeRole` — this is the first *reader* of that field), the 10 most recent `MeetingMinutes` by `meetingDate desc`, every `Asset`, `OrgFile` rows where `category` is `SOP` or `REPORT` (titles/filenames only, not the file contents), and `PUBLISHED` events with `startAt >= now`. `HandoverPdfService` (plain pdf-lib injectable, no Prisma dependency, same testability rationale as `CertificatePdfService`) renders one heading + line-listing per section, page-breaking when a section overflows; an empty section renders "None" rather than being silently skipped.
+
+**Audit:** one new action, `handover.generate` (`targetType: 'Organization'`, no personal data). This is a deliberate exception to "reads are never audited" — a full-org data export (committee roster + asset inventory + file manifest in one response) is a meaningfully different event from a normal list/detail read.
+
+No new Prisma models or columns. `TENANT_SCOPED_MODELS` unchanged.
+
+---
+
 ## 3. Multi-Tenant Isolation
 
 - Every tenant-owned row carries `organizationId`.
