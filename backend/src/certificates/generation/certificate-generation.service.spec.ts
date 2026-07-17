@@ -2,7 +2,7 @@ import { Test } from '@nestjs/testing';
 import { getQueueToken } from '@nestjs/bullmq';
 import { PrismaService } from '../../prisma/prisma.service';
 import { CertificateGenerationService } from './certificate-generation.service';
-import { CERTIFICATE_GENERATE_JOB, CERTIFICATE_QUEUE } from './certificate-generation.types';
+import { CERTIFICATE_FEEDBACK_WINDOW_CLOSE_JOB, CERTIFICATE_GENERATE_JOB, CERTIFICATE_QUEUE, feedbackWindowCloseJobId } from './certificate-generation.types';
 
 describe('CertificateGenerationService', () => {
   let service: CertificateGenerationService;
@@ -10,6 +10,7 @@ describe('CertificateGenerationService', () => {
   let prisma: {
     attendance: { findMany: jest.Mock };
     certificate: { findMany: jest.Mock };
+    feedbackResponse: { findMany: jest.Mock };
   };
 
   beforeEach(async () => {
@@ -17,6 +18,7 @@ describe('CertificateGenerationService', () => {
     prisma = {
       attendance: { findMany: jest.fn().mockResolvedValue([]) },
       certificate: { findMany: jest.fn().mockResolvedValue([]) },
+      feedbackResponse: { findMany: jest.fn().mockResolvedValue([]) },
     };
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -60,5 +62,48 @@ describe('CertificateGenerationService', () => {
     await service.enqueueBatchForEvent('org1', 'event1', 'actor1');
     expect(queue.add).not.toHaveBeenCalled();
     expect(prisma.certificate.findMany).not.toHaveBeenCalled();
+  });
+
+  it('onlyWithFeedback: only enqueues attendees who also have a FeedbackResponse', async () => {
+    prisma.attendance.findMany.mockResolvedValue([
+      { registration: { userId: 'u1' } },
+      { registration: { userId: 'u2' } },
+    ]);
+    prisma.feedbackResponse.findMany.mockResolvedValue([{ userId: 'u1' }]);
+    prisma.certificate.findMany.mockResolvedValue([]);
+
+    await service.enqueueBatchForEvent('org1', 'event1', 'actor1', { onlyWithFeedback: true });
+
+    expect(queue.add).toHaveBeenCalledTimes(1);
+    expect(queue.add).toHaveBeenCalledWith(CERTIFICATE_GENERATE_JOB, { organizationId: 'org1', eventId: 'event1', userId: 'u1', actorUserId: 'actor1' });
+  });
+
+  it('onlyWithFeedback: enqueues nothing when no attendee has feedback yet', async () => {
+    prisma.attendance.findMany.mockResolvedValue([{ registration: { userId: 'u1' } }]);
+    prisma.feedbackResponse.findMany.mockResolvedValue([]);
+
+    await service.enqueueBatchForEvent('org1', 'event1', 'actor1', { onlyWithFeedback: true });
+
+    expect(queue.add).not.toHaveBeenCalled();
+    expect(prisma.certificate.findMany).not.toHaveBeenCalled();
+  });
+
+  it('scheduleFeedbackWindowClose adds a delayed job keyed by event id', async () => {
+    const endAt = new Date(Date.now() + 2 * 86400000);
+    await service.scheduleFeedbackWindowClose('org1', 'event1', endAt);
+
+    const call = queue.add.mock.calls[0];
+    expect(call[0]).toBe(CERTIFICATE_FEEDBACK_WINDOW_CLOSE_JOB);
+    expect(call[1]).toEqual({ organizationId: 'org1', eventId: 'event1' });
+    expect(call[2].jobId).toBe(feedbackWindowCloseJobId('event1'));
+    expect(call[2].delay).toBeGreaterThan(0);
+  });
+
+  it('scheduleFeedbackWindowClose clamps delay to 0 when endAt + window is already in the past', async () => {
+    const endAt = new Date(Date.now() - 20 * 86400000);
+    await service.scheduleFeedbackWindowClose('org1', 'event1', endAt);
+
+    const call = queue.add.mock.calls[0];
+    expect(call[2].delay).toBe(0);
   });
 });

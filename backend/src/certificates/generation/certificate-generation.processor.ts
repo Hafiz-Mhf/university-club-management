@@ -6,7 +6,14 @@ import { AuditService } from '../../audit/audit.service';
 import { StorageService } from '../../storage/storage.service';
 import { NotificationsService } from '../../notifications/notifications.service';
 import { CertificatePdfService } from './certificate-pdf.service';
-import { CERTIFICATE_GENERATE_JOB, CERTIFICATE_QUEUE, CertificateGenerateJobPayload } from './certificate-generation.types';
+import { CertificateGenerationService } from './certificate-generation.service';
+import {
+  CERTIFICATE_FEEDBACK_WINDOW_CLOSE_JOB,
+  CERTIFICATE_GENERATE_JOB,
+  CERTIFICATE_QUEUE,
+  CertificateGenerateJobPayload,
+  FeedbackWindowCloseJobPayload,
+} from './certificate-generation.types';
 
 @Processor(CERTIFICATE_QUEUE)
 export class CertificateGenerationProcessor extends WorkerHost {
@@ -18,11 +25,17 @@ export class CertificateGenerationProcessor extends WorkerHost {
     private readonly pdf: CertificatePdfService,
     private readonly audit: AuditService,
     private readonly notifications: NotificationsService,
+    private readonly certificateGeneration: CertificateGenerationService,
   ) {
     super();
   }
 
   async process(job: Job): Promise<void> {
+    if (job.name === CERTIFICATE_FEEDBACK_WINDOW_CLOSE_JOB) {
+      const { organizationId, eventId } = job.data as FeedbackWindowCloseJobPayload;
+      await this.certificateGeneration.enqueueBatchForEvent(organizationId, eventId, undefined);
+      return;
+    }
     if (job.name !== CERTIFICATE_GENERATE_JOB) return;
     const { organizationId, eventId, userId, actorUserId } = job.data as CertificateGenerateJobPayload;
 

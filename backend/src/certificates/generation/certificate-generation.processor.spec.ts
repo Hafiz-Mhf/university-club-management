@@ -4,11 +4,12 @@ import { AuditService } from '../../audit/audit.service';
 import { StorageService } from '../../storage/storage.service';
 import { NotificationsService } from '../../notifications/notifications.service';
 import { CertificatePdfService } from './certificate-pdf.service';
+import { CertificateGenerationService } from './certificate-generation.service';
 import { CertificateGenerationProcessor } from './certificate-generation.processor';
-import { CERTIFICATE_GENERATE_JOB } from './certificate-generation.types';
+import { CERTIFICATE_FEEDBACK_WINDOW_CLOSE_JOB, CERTIFICATE_GENERATE_JOB } from './certificate-generation.types';
 
-function fakeJob(data: unknown) {
-  return { id: 'job1', name: CERTIFICATE_GENERATE_JOB, data } as any;
+function fakeJob(name: string, data: unknown) {
+  return { id: 'job1', name, data } as any;
 }
 
 describe('CertificateGenerationProcessor', () => {
@@ -24,6 +25,7 @@ describe('CertificateGenerationProcessor', () => {
   let pdf: { render: jest.Mock };
   let audit: { record: jest.Mock };
   let notifications: { enqueueCertificateReady: jest.Mock };
+  let certificateGeneration: { enqueueBatchForEvent: jest.Mock };
 
   const jobPayload = { organizationId: 'org1', eventId: 'event1', userId: 'user1', actorUserId: 'actor1' };
 
@@ -43,6 +45,7 @@ describe('CertificateGenerationProcessor', () => {
     pdf = { render: jest.fn().mockResolvedValue(Buffer.from('%PDF-fake%')) };
     audit = { record: jest.fn().mockResolvedValue(undefined) };
     notifications = { enqueueCertificateReady: jest.fn().mockResolvedValue(undefined) };
+    certificateGeneration = { enqueueBatchForEvent: jest.fn().mockResolvedValue(undefined) };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -52,13 +55,14 @@ describe('CertificateGenerationProcessor', () => {
         { provide: CertificatePdfService, useValue: pdf },
         { provide: AuditService, useValue: audit },
         { provide: NotificationsService, useValue: notifications },
+        { provide: CertificateGenerationService, useValue: certificateGeneration },
       ],
     }).compile();
     processor = moduleRef.get(CertificateGenerationProcessor);
   });
 
   it('renders, stores, creates the Certificate row, audits, and notifies', async () => {
-    await processor.process(fakeJob(jobPayload));
+    await processor.process(fakeJob(CERTIFICATE_GENERATE_JOB, jobPayload));
 
     expect(pdf.render).toHaveBeenCalledWith(expect.objectContaining({ participantFullName: 'Alex Tan', eventTitle: 'Tech Talk' }));
     expect(storage.putObject).toHaveBeenCalledWith('certificates/org1/event1/user1.pdf', expect.any(Buffer), 'application/pdf');
@@ -73,7 +77,7 @@ describe('CertificateGenerationProcessor', () => {
 
   it('skips silently when a Certificate already exists for this event+user (race guard)', async () => {
     prisma.certificate.findFirst.mockResolvedValue({ id: 'existing' });
-    await processor.process(fakeJob(jobPayload));
+    await processor.process(fakeJob(CERTIFICATE_GENERATE_JOB, jobPayload));
     expect(pdf.render).not.toHaveBeenCalled();
     expect(storage.putObject).not.toHaveBeenCalled();
     expect(prisma.certificate.create).not.toHaveBeenCalled();
@@ -83,7 +87,7 @@ describe('CertificateGenerationProcessor', () => {
     prisma.organization.findUnique.mockResolvedValue({ name: 'Coding Club', logoKey: 'logos/org1.png', primaryColor: '#2563eb', storageQuotaMb: 1024 });
     storage.getObject.mockRejectedValue(new Error('not found'));
 
-    await processor.process(fakeJob(jobPayload));
+    await processor.process(fakeJob(CERTIFICATE_GENERATE_JOB, jobPayload));
 
     expect(pdf.render).toHaveBeenCalledWith(expect.objectContaining({ orgLogoBytes: null }));
     expect(prisma.certificate.create).toHaveBeenCalled();
@@ -93,10 +97,24 @@ describe('CertificateGenerationProcessor', () => {
     prisma.certificate.aggregate.mockResolvedValue({ _sum: { fileSizeBytes: 1024 * 1024 * 1024 } });
     prisma.organization.findUnique.mockResolvedValue({ name: 'Coding Club', logoKey: null, primaryColor: '#2563eb', storageQuotaMb: 1 });
 
-    await processor.process(fakeJob(jobPayload));
+    await processor.process(fakeJob(CERTIFICATE_GENERATE_JOB, jobPayload));
 
     expect(prisma.certificate.create).not.toHaveBeenCalled();
     expect(audit.record).not.toHaveBeenCalled();
     expect(notifications.enqueueCertificateReady).not.toHaveBeenCalled();
+  });
+
+  it('a feedback-window-close job re-runs the ungated batch enqueue for that event, and touches nothing else', async () => {
+    await processor.process(fakeJob(CERTIFICATE_FEEDBACK_WINDOW_CLOSE_JOB, { organizationId: 'org1', eventId: 'event1' }));
+
+    expect(certificateGeneration.enqueueBatchForEvent).toHaveBeenCalledWith('org1', 'event1', undefined);
+    expect(pdf.render).not.toHaveBeenCalled();
+    expect(prisma.certificate.create).not.toHaveBeenCalled();
+  });
+
+  it('ignores an unrecognized job name', async () => {
+    await processor.process(fakeJob('some.other.job', {}));
+    expect(pdf.render).not.toHaveBeenCalled();
+    expect(certificateGeneration.enqueueBatchForEvent).not.toHaveBeenCalled();
   });
 });
