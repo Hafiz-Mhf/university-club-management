@@ -44,6 +44,17 @@ describe('StorageService', () => {
     await storage.deleteObject(key);
   });
 
+  it('getObject returns the exact bytes previously written', async () => {
+    const key = `test/${Date.now()}-${Math.random()}.txt`;
+    const body = Buffer.from('hello getObject');
+    await storage.putObject(key, body, 'text/plain');
+
+    const fetched = await storage.getObject(key);
+    expect(fetched.equals(body)).toBe(true);
+
+    await storage.deleteObject(key);
+  });
+
   it('deleteObject removes the object — a subsequent signed URL fetch 404s', async () => {
     const key = `test/${Date.now()}-${Math.random()}.txt`;
     await storage.putObject(key, Buffer.from('temp'), 'text/plain');
