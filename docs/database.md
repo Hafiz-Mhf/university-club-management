@@ -41,11 +41,13 @@ written by every module; ConsentRecord is user+purpose scoped).
 | name | string | |
 | slug | string, unique | public URL |
 | description | text | |
-| logoKey | string, nullable | private storage key |
+| logoKey | string, nullable | private storage key, `branding/{orgId}/logo.{ext}` — set only via upload endpoint, not raw PATCH |
+| bannerKey | string, nullable | private storage key, `branding/{orgId}/banner.{ext}`, same upload-only rule as logoKey |
 | advisors | jsonb | list |
 | socialLinks | jsonb | |
-| storageQuotaMb | int | default quota |
-| primaryColor | string | branding |
+| storageQuotaMb | int | default quota — logo/banner do NOT count against this; flat 2MB per-upload cap instead |
+| primaryColor | string | branding, hex, default `#2563eb` |
+| secondaryColor | string | branding, hex, default `#1e293b` |
 | settings | jsonb | |
 | createdAt / updatedAt | timestamp | |
 

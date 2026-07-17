@@ -537,6 +537,18 @@ No new Prisma models or columns. `TENANT_SCOPED_MODELS` unchanged.
 
 ---
 
+### As built — branding & themes (shipped)
+
+New endpoints on `OrganizationsController`: `POST`/`DELETE .../logo` and `.../banner` (multipart upload, PNG/JPEG/WebP, ≤2MB, `PRESIDENT`/`VICE_PRESIDENT`), plus `secondaryColor` added to `PATCH .../settings` (`PRESIDENT` only, unchanged from `primaryColor`'s existing gate).
+
+Two new nullable `Organization` columns, `bannerKey` and `secondaryColor` (default `#1e293b`). Logo/banner are single overwritable slots at a deterministic key (`branding/<orgId>/<kind>.<ext>`) — re-uploading with a different image format deletes the old object after the new one is confirmed written (never the reverse, so a failed upload never leaves the org logo-less). They do **not** join the shared storage-quota aggregate (`Certificate`/`OrgFile`/`GalleryPhoto`'s `SUM(fileSizeBytes)`) — a flat 2MB per-upload cap is enough for a non-accumulating single-image field, so `files.service.ts`/`certificates.service.ts`/`gallery.service.ts` are unchanged.
+
+`OrganizationsService.findOne()` now resolves `logoKey`/`bannerKey` to signed `logoUrl`/`bannerUrl` (5-minute TTL, matching every other signed-URL precedent) instead of returning raw storage keys — the authenticated org view and the public club page (`public.service.ts getProfile()`, which also gained `bannerUrl`) now behave identically. `logoKey` was removed from the raw `PATCH /organizations/:orgId` body entirely — upload is the only way to set it, closing off a client pointing it at an arbitrary/unvalidated storage key.
+
+**Audit:** four new actions — `organization.logo.upload`, `organization.logo.delete`, `organization.banner.upload`, `organization.banner.delete` — same shape as every other mutation (`targetType: 'Organization'`, metadata `{ key }`, no personal data). A delete on an already-absent key is a no-op: no storage call, no audit row.
+
+---
+
 ## 3. Multi-Tenant Isolation
 
 - Every tenant-owned row carries `organizationId`.
