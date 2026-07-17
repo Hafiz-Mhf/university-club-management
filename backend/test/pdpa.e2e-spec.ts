@@ -349,5 +349,28 @@ describe('PDPA (e2e)', () => {
       });
       expect(auditRows).toHaveLength(1);
     });
+
+    it('login and refresh responses reflect consentStale', async () => {
+      const email = `pdpa-flag-${Date.now()}@test.io`;
+      await request(app.getHttpServer()).post('/auth/register')
+        .send({ email, password: 'password123', fullName: email, consent: true });
+      const freshLogin = await request(app.getHttpServer()).post('/auth/login')
+        .send({ email, password: 'password123' }).expect(201);
+      expect(freshLogin.body.consentStale).toBe(false);
+
+      const user = await prisma.user.findUnique({ where: { email } });
+      await prisma.consentRecord.updateMany({
+        where: { userId: user!.id, purpose: 'account' },
+        data: { policyVersion: 'v0-old' },
+      });
+
+      const staleLogin = await request(app.getHttpServer()).post('/auth/login')
+        .send({ email, password: 'password123' }).expect(201);
+      expect(staleLogin.body.consentStale).toBe(true);
+
+      const refreshRes = await request(app.getHttpServer()).post('/auth/refresh')
+        .send({ refreshToken: staleLogin.body.refreshToken }).expect(201);
+      expect(refreshRes.body.consentStale).toBe(true);
+    });
   });
 });
