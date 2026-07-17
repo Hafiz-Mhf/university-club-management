@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Patch, Post, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { OrganizationsService } from './organizations.service';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { UpdateOrganizationSettingsDto } from './dto/update-organization-settings.dto';
@@ -9,6 +10,10 @@ import { TenantGuard } from '../tenancy/tenant.guard';
 import { OrgId } from '../tenancy/org-id.decorator';
 import { RolesGuard } from '../rbac/roles.guard';
 import { Roles } from '../rbac/roles.decorator';
+
+// Multer's cap sits above the service's 2MB check so an oversized file gets
+// the service's 400 (not multer's 413) — same layering as CertificatesController.
+const BRANDING_UPLOAD_LIMITS = { limits: { fileSize: 4 * 1024 * 1024 } };
 
 @Controller('organizations')
 export class OrganizationsController {
@@ -55,5 +60,43 @@ export class OrganizationsController {
     @CurrentUser() user: { userId: string },
   ) {
     return this.orgs.updateSettings(orgId, body, user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
+  @Roles('PRESIDENT', 'VICE_PRESIDENT')
+  @UseInterceptors(FileInterceptor('file', BRANDING_UPLOAD_LIMITS))
+  @Post(':orgId/logo')
+  uploadLogo(
+    @OrgId() orgId: string,
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @CurrentUser() user: { userId: string },
+  ) {
+    return this.orgs.uploadLogo(orgId, file, user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
+  @Roles('PRESIDENT', 'VICE_PRESIDENT')
+  @Delete(':orgId/logo')
+  deleteLogo(@OrgId() orgId: string, @CurrentUser() user: { userId: string }) {
+    return this.orgs.deleteLogo(orgId, user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
+  @Roles('PRESIDENT', 'VICE_PRESIDENT')
+  @UseInterceptors(FileInterceptor('file', BRANDING_UPLOAD_LIMITS))
+  @Post(':orgId/banner')
+  uploadBanner(
+    @OrgId() orgId: string,
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @CurrentUser() user: { userId: string },
+  ) {
+    return this.orgs.uploadBanner(orgId, file, user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
+  @Roles('PRESIDENT', 'VICE_PRESIDENT')
+  @Delete(':orgId/banner')
+  deleteBanner(@OrgId() orgId: string, @CurrentUser() user: { userId: string }) {
+    return this.orgs.deleteBanner(orgId, user.userId);
   }
 }
