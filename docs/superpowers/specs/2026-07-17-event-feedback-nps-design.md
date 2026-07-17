@@ -80,25 +80,30 @@ there's no path back to `DRAFT`/`PUBLISHED` that would need to un-schedule it.
 
 ```prisma
 model FeedbackResponse {
-  id                 String   @id @default(cuid())
-  organizationId     String
+  id                 String   @id @default(uuid())
   eventId            String
+  event              Event    @relation(fields: [eventId], references: [id])
+  organizationId     String
   userId             String
+  user               User     @relation(fields: [userId], references: [id])
   npsScore           Int      // 0-10, "how likely are you to recommend this event"
   contentRating      Int      // 1-5
   organizationRating Int      // 1-5
   venueRating        Int      // 1-5
-  comment            String?  @db.Text
+  comment            String?
   createdAt          DateTime @default(now())
 
-  organization Organization @relation(fields: [organizationId], references: [id])
-  event        Event        @relation(fields: [eventId], references: [id])
-  user         User         @relation(fields: [userId], references: [id])
-
   @@unique([eventId, userId])
-  @@index([organizationId, eventId])
+  @@index([organizationId])
 }
 ```
+
+Ids are `uuid()` (not `cuid()`) to match every other model in this schema.
+`organizationId` is a flat scalar with no `Organization` relation — mirrors
+`Certificate`'s exact shape, which has the same redundant-with-`eventId`
+`organizationId` column and no formal relation to `Organization`. No
+`@db.Text` — unused anywhere else in this schema, plain `String?` matches
+convention.
 
 `Event` gains: `requireFeedbackForCertificate Boolean @default(false)`.
 
