@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
-import { api, ApiError, setOnAuthFailure } from '@/lib/api';
+import { api, ApiError, setOnAuthFailure, setOnConsentStale } from '@/lib/api';
 import { useAuthStore } from '@/features/auth/auth-store';
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -18,6 +18,7 @@ describe('api client', () => {
     fetchMock = vi.fn();
     vi.stubGlobal('fetch', fetchMock);
     setOnAuthFailure(null);
+    setOnConsentStale(null);
   });
 
   afterEach(() => {
@@ -128,6 +129,43 @@ describe('api client', () => {
     expect(err.status).toBe(404);
     expect(err.message).toBe('Not found');
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('consent-stale 403 flags the store and fires onConsentStale', async () => {
+    useAuthStore.getState().setSession({
+      accessToken: 'tok',
+      refreshToken: 'ref',
+      consentStale: false,
+    });
+    const onStale = vi.fn();
+    setOnConsentStale(onStale);
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(403, { message: 'Account consent must be renewed' }),
+    );
+
+    const err = await api('/organizations').catch((e) => e);
+
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.status).toBe(403);
+    expect(useAuthStore.getState().consentStale).toBe(true);
+    expect(onStale).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1); // no refresh attempt on 403
+  });
+
+  it('an ordinary 403 does not flag consent', async () => {
+    useAuthStore.getState().setSession({
+      accessToken: 'tok',
+      refreshToken: 'ref',
+      consentStale: false,
+    });
+    const onStale = vi.fn();
+    setOnConsentStale(onStale);
+    fetchMock.mockResolvedValueOnce(jsonResponse(403, { message: 'Forbidden' }));
+
+    await expect(api('/organizations/x/dashboard')).rejects.toBeInstanceOf(ApiError);
+
+    expect(useAuthStore.getState().consentStale).toBe(false);
+    expect(onStale).not.toHaveBeenCalled();
   });
 
   it('anonymous requests send no Authorization header and never refresh on 401', async () => {
