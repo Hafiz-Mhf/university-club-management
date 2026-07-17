@@ -18,7 +18,7 @@ describe('OrganizationsService.create', () => {
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       imports: [ConfigModule.forRoot({ isGlobal: true }), JwtModule.register({ secret: 'test' })],
-      providers: [OrganizationsService, AuthService, PrismaService, AuditService, RefreshTokenRepository],
+      providers: [OrganizationsService, AuthService, PrismaService, AuditService, RefreshTokenRepository, StorageService],
     }).compile();
     orgs = moduleRef.get(OrganizationsService);
     prisma = moduleRef.get(PrismaService);
@@ -80,5 +80,48 @@ describe('OrganizationsService.updateSettings', () => {
     const updated = await orgs.updateSettings(orgId, { primaryColor: '#ff0000', secondaryColor: '#00ff00' }, userId);
     expect(updated.primaryColor).toBe('#ff0000');
     expect(updated.secondaryColor).toBe('#00ff00');
+  });
+});
+
+describe('OrganizationsService.findOne', () => {
+  let orgs: OrganizationsService;
+  let prisma: PrismaService;
+  let auth: AuthService;
+  let userId: string;
+  let orgId: string;
+
+  beforeAll(async () => {
+    const moduleRef = await Test.createTestingModule({
+      imports: [ConfigModule.forRoot({ isGlobal: true }), JwtModule.register({ secret: 'test' })],
+      providers: [OrganizationsService, AuthService, PrismaService, AuditService, RefreshTokenRepository, StorageService],
+    }).compile();
+    orgs = moduleRef.get(OrganizationsService);
+    prisma = moduleRef.get(PrismaService);
+    auth = moduleRef.get(AuthService);
+    await prisma.onModuleInit();
+    const u = await auth.register({ email: `orgfind-${Date.now()}@test.io`, password: 'password123', fullName: 'Pres', consent: true });
+    userId = u.id;
+    const org = await orgs.create(userId, { name: 'FindOrg', slug: `findorg-${Date.now()}` });
+    orgId = org.id;
+  });
+  afterAll(async () => {
+    await prisma.membership.deleteMany({ where: { userId, organizationId: orgId } });
+    await prisma.organization.delete({ where: { id: orgId } });
+    await prisma.consentRecord.deleteMany({ where: { userId } });
+    await prisma.user.delete({ where: { id: userId } });
+    await prisma.$disconnect();
+  });
+
+  it('returns null logoUrl/bannerUrl and no raw keys when unset', async () => {
+    const found = await orgs.findOne(orgId);
+    expect(found!.logoUrl).toBeNull();
+    expect(found!.bannerUrl).toBeNull();
+    expect(found).not.toHaveProperty('logoKey');
+    expect(found).not.toHaveProperty('bannerKey');
+  });
+
+  it('returns null for a nonexistent organization', async () => {
+    const found = await orgs.findOne('00000000-0000-0000-0000-000000000000');
+    expect(found).toBeNull();
   });
 });

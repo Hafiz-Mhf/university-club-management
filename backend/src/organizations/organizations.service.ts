@@ -1,16 +1,20 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { StorageService } from '../storage/storage.service';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { UpdateOrganizationSettingsDto } from './dto/update-organization-settings.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
 import { AuditService } from '../audit/audit.service';
+
+const SIGNED_URL_TTL_SECONDS = 300;
 
 @Injectable()
 export class OrganizationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly storage: StorageService,
   ) {}
 
   async create(userId: string, dto: CreateOrganizationDto) {
@@ -33,8 +37,13 @@ export class OrganizationsService {
     }
   }
 
-  findOne(organizationId: string) {
-    return this.prisma.organization.findUnique({ where: { id: organizationId } });
+  async findOne(organizationId: string) {
+    const org = await this.prisma.organization.findUnique({ where: { id: organizationId } });
+    if (!org) return null;
+    const { logoKey, bannerKey, ...rest } = org;
+    const logoUrl = logoKey ? await this.storage.getSignedDownloadUrl(logoKey, SIGNED_URL_TTL_SECONDS) : null;
+    const bannerUrl = bannerKey ? await this.storage.getSignedDownloadUrl(bannerKey, SIGNED_URL_TTL_SECONDS) : null;
+    return { ...rest, logoUrl, bannerUrl };
   }
 
   listForUser(userId: string) {
