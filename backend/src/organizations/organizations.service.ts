@@ -1,4 +1,4 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
@@ -8,6 +8,16 @@ import { UpdateOrganizationDto } from './dto/update-organization.dto';
 import { AuditService } from '../audit/audit.service';
 
 const SIGNED_URL_TTL_SECONDS = 300;
+
+const ALLOWED_IMAGE_MIME: Record<string, string> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/webp': 'webp',
+};
+const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
+
+type UploadedFile = { mimetype: string; size: number; buffer: Buffer };
+type BrandingKind = 'logo' | 'banner';
 
 @Injectable()
 export class OrganizationsService {
@@ -44,6 +54,56 @@ export class OrganizationsService {
     const logoUrl = logoKey ? await this.storage.getSignedDownloadUrl(logoKey, SIGNED_URL_TTL_SECONDS) : null;
     const bannerUrl = bannerKey ? await this.storage.getSignedDownloadUrl(bannerKey, SIGNED_URL_TTL_SECONDS) : null;
     return { ...rest, logoUrl, bannerUrl };
+  }
+
+  private async uploadBrandingImage(
+    organizationId: string,
+    kind: BrandingKind,
+    file: UploadedFile | undefined,
+    actorUserId: string,
+  ) {
+    if (!file) throw new BadRequestException('A file is required');
+    const ext = ALLOWED_IMAGE_MIME[file.mimetype];
+    if (!ext) throw new BadRequestException('Only PNG, JPEG, or WebP images are accepted');
+    if (file.size > MAX_IMAGE_BYTES) throw new BadRequestException('File exceeds the 2MB limit');
+
+    const organization = await this.prisma.organization.findUnique({ where: { id: organizationId } });
+    if (!organization) throw new NotFoundException('Organization not found');
+
+    const field = kind === 'logo' ? 'logoKey' : 'bannerKey';
+    const oldKey = kind === 'logo' ? organization.logoKey : organization.bannerKey;
+    const newKey = `branding/${organizationId}/${kind}.${ext}`;
+
+    await this.storage.putObject(newKey, file.buffer, file.mimetype);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.organization.update({ where: { id: organizationId }, data: { [field]: newKey } });
+      await this.audit.record(
+        {
+          organizationId,
+          actorUserId,
+          action: `organization.${kind}.upload`,
+          targetType: 'Organization',
+          targetId: organizationId,
+          metadata: { key: newKey },
+        },
+        tx,
+      );
+    });
+
+    if (oldKey && oldKey !== newKey) {
+      await this.storage.deleteObject(oldKey);
+    }
+
+    return this.findOne(organizationId);
+  }
+
+  uploadLogo(organizationId: string, file: UploadedFile | undefined, actorUserId: string) {
+    return this.uploadBrandingImage(organizationId, 'logo', file, actorUserId);
+  }
+
+  uploadBanner(organizationId: string, file: UploadedFile | undefined, actorUserId: string) {
+    return this.uploadBrandingImage(organizationId, 'banner', file, actorUserId);
   }
 
   listForUser(userId: string) {
