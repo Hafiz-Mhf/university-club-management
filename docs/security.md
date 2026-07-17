@@ -521,6 +521,22 @@ No new Prisma models. `TENANT_SCOPED_MODELS` unchanged.
 
 ---
 
+### As built — certificate generator (shipped)
+
+No new endpoints — an internal side effect of `EventsService.complete()`, via a second BullMQ queue (`certificates`, alongside `notifications`) and a new `generation/` subfolder in the existing `backend/src/certificates/` module.
+
+On `complete()`, one `certificate.generate` job is enqueued per `PRESENT` attendee who doesn't already have a `Certificate` row (same eligibility rule Phase 1's manual upload already enforces). Each job renders a landscape PDF via `pdf-lib` (`CertificatePdfService` — participant name, event title, event date, org name/logo/`primaryColor`, no verification code, no signature line), stores it at the exact key manual upload already uses (`certificates/<orgId>/<eventId>/<userId>.pdf`), and creates the same `Certificate` row shape Phase 1 creates (`uploadedByUserId` = the actor who called `complete()`). A `Certificate` row created first by either path (generate or manual upload) wins — the other is a no-op, enforced by `@@unique([eventId, userId])` plus a race-guard existence check inside the processor.
+
+Storage quota exceeded during generation: logged and skipped (no `Certificate` row, no audit row) — not thrown, since there's no HTTP response to throw into inside a background job and BullMQ's retry wouldn't help (quota doesn't change on retry).
+
+**Email Notifications extension:** one more job kind, `certificate.ready`, fired from both the new generation processor and the existing manual `upload()` path — participants get notified regardless of how their certificate was created. Reuses the exact same `notification.email` audit action; this is the first `notification.email` kind whose `targetType` is `Certificate` rather than `Registration`.
+
+**Audit:** one new action, `certificate.generate` — same shape as `certificate.upload` (`targetType: 'Certificate'`, metadata `{ certificateId, eventId, userId }`).
+
+No new Prisma models or columns. `TENANT_SCOPED_MODELS` unchanged.
+
+---
+
 ## 3. Multi-Tenant Isolation
 
 - Every tenant-owned row carries `organizationId`.
