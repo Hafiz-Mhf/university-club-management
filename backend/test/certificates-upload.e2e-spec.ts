@@ -176,4 +176,26 @@ describe('Certificate upload (e2e)', () => {
     const fetchedBytes = Buffer.from(await fetched.arrayBuffer());
     expect(fetchedBytes.equals(firstBytes)).toBe(true);
   });
+
+  it('a successful upload also enqueues a certificate.ready notification (audited)', async () => {
+    const { userId } = await presentParticipant();
+    const uploadRes = await request(app.getHttpServer())
+      .post(`/organizations/${orgId}/events/${eventId}/certificates`)
+      .set('Authorization', `Bearer ${presToken}`)
+      .field('userId', userId)
+      .attach('file', pdfBytes(), { filename: 'cert.pdf', contentType: 'application/pdf' })
+      .expect(201);
+    const certificateId = uploadRes.body.id;
+
+    const deadline = Date.now() + 5000;
+    for (;;) {
+      const rows = await request(app.getHttpServer())
+        .get(`/organizations/${orgId}/audit-logs`)
+        .set('Authorization', `Bearer ${presToken}`)
+        .query({ action: 'notification.email', pageSize: 100 });
+      if (rows.body.data.some((r: { targetId: string }) => r.targetId === certificateId)) break;
+      if (Date.now() > deadline) throw new Error('Timed out waiting for certificate.ready audit row');
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+  });
 });

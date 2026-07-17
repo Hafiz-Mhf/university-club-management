@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { AuditService } from '../audit/audit.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 const ALLOWED_MIME = 'application/pdf';
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
@@ -18,6 +19,7 @@ export class CertificatesService {
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
     private readonly audit: AuditService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async upload(
@@ -61,13 +63,14 @@ export class CertificatesService {
     const storageKey = `certificates/${organizationId}/${eventId}/${targetUserId}.pdf`;
     await this.storage.putObject(storageKey, file.buffer, ALLOWED_MIME);
 
+    let certificate;
     try {
       // Create + audit are atomic, matching every other mutating service.
       // If the audit insert fails and rolls back the create, the storage
       // object is left at the deterministic key with no DB row — that is
       // self-healing: a retry passes the pre-check and overwrites it.
-      return await this.prisma.$transaction(async (tx) => {
-        const certificate = await tx.certificate.create({
+      certificate = await this.prisma.$transaction(async (tx) => {
+        const created = await tx.certificate.create({
           data: {
             eventId, organizationId, userId: targetUserId,
             storageKey, fileSizeBytes: file.size, uploadedByUserId: actorUserId,
@@ -75,10 +78,10 @@ export class CertificatesService {
         });
         await this.audit.record({
           organizationId, actorUserId, action: 'certificate.upload',
-          targetType: 'Certificate', targetId: certificate.id,
-          metadata: { certificateId: certificate.id, eventId, userId: targetUserId },
+          targetType: 'Certificate', targetId: created.id,
+          metadata: { certificateId: created.id, eventId, userId: targetUserId },
         }, tx);
-        return certificate;
+        return created;
       });
     } catch (error) {
       // Narrow residual race the pre-check above doesn't fully close (two
@@ -90,6 +93,9 @@ export class CertificatesService {
       }
       throw error;
     }
+
+    await this.notifications.enqueueCertificateReady(organizationId, certificate.id);
+    return certificate;
   }
 
   list(organizationId: string, eventId: string) {

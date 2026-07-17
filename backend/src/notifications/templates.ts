@@ -58,3 +58,15 @@ export function eventReminderEmail(data: EventReminderEmailData): { subject: str
     text: `Hi ${data.fullName},\n\nThis is a reminder that "${data.eventTitle}" starts at ${data.startAt.toISOString()}${venueLine}.\n`,
   };
 }
+
+export interface CertificateReadyEmailData {
+  fullName: string;
+  eventTitle: string;
+}
+
+export function certificateReadyEmail(data: CertificateReadyEmailData): { subject: string; text: string } {
+  return {
+    subject: `Your certificate is ready: ${data.eventTitle}`,
+    text: `Hi ${data.fullName},\n\nYour certificate for "${data.eventTitle}" is ready to download.\n`,
+  };
+}

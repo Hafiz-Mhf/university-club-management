@@ -42,6 +42,11 @@ describe('NotificationsService', () => {
     expect(queue.add).toHaveBeenCalledWith(NotificationJobName.RegistrationPromoted, { organizationId: 'org1', registrationId: 'reg1' });
   });
 
+  it('enqueueCertificateReady adds a certificate.ready job', async () => {
+    await service.enqueueCertificateReady('org1', 'cert1');
+    expect(queue.add).toHaveBeenCalledWith(NotificationJobName.CertificateReady, { organizationId: 'org1', certificateId: 'cert1' });
+  });
+
   it('enqueueNewRegistrationForCommittee adds one job per ACTIVE committee-tier member', async () => {
     prisma.membership.findMany.mockResolvedValue([{ userId: 'u1' }, { userId: 'u2' }]);
     await service.enqueueNewRegistrationForCommittee('org1', 'reg1');

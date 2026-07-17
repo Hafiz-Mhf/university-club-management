@@ -7,6 +7,7 @@ export enum NotificationJobName {
   RegistrationPromoted = 'registration.promoted',
   RegistrationNew = 'registration.new',
   EventReminder = 'event.reminder',
+  CertificateReady = 'certificate.ready',
 }
 
 export interface RegistrationJobPayload {
@@ -23,6 +24,11 @@ export interface CommitteeNewRegistrationJobPayload {
 export interface EventReminderJobPayload {
   organizationId: string;
   eventId: string;
+}
+
+export interface CertificateJobPayload {
+  organizationId: string;
+  certificateId: string;
 }
 
 // BullMQ rejects custom job ids containing ':' (its Redis key separator),

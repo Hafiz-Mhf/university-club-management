@@ -15,6 +15,7 @@ describe('NotificationsProcessor', () => {
     registration: { findUnique: jest.Mock; findMany: jest.Mock };
     user: { findUnique: jest.Mock };
     event: { findUnique: jest.Mock };
+    certificate: { findUnique: jest.Mock };
   };
   let mailer: { sendMail: jest.Mock };
   let audit: { record: jest.Mock };
@@ -24,6 +25,7 @@ describe('NotificationsProcessor', () => {
       registration: { findUnique: jest.fn(), findMany: jest.fn() },
       user: { findUnique: jest.fn() },
       event: { findUnique: jest.fn() },
+      certificate: { findUnique: jest.fn() },
     };
     mailer = { sendMail: jest.fn().mockResolvedValue(undefined) };
     audit = { record: jest.fn().mockResolvedValue(undefined) };
@@ -89,5 +91,19 @@ describe('NotificationsProcessor', () => {
     await processor.process(fakeJob(NotificationJobName.EventReminder, { organizationId: 'org1', eventId: 'event1' }));
     expect(prisma.registration.findMany).not.toHaveBeenCalled();
     expect(mailer.sendMail).not.toHaveBeenCalled();
+  });
+
+  it('sends a certificate.ready email and audits it against the Certificate', async () => {
+    prisma.certificate.findUnique.mockResolvedValue({
+      user: { email: 'p@test.io', fullName: 'Alex Tan' },
+      event: { title: 'Tech Talk' },
+    });
+    await processor.process(fakeJob(NotificationJobName.CertificateReady, { organizationId: 'org1', certificateId: 'cert1' }));
+    expect(mailer.sendMail).toHaveBeenCalledWith(expect.objectContaining({ to: 'p@test.io' }));
+    expect(audit.record).toHaveBeenCalledWith({
+      organizationId: 'org1', action: 'notification.email',
+      targetType: 'Certificate', targetId: 'cert1',
+      metadata: { kind: NotificationJobName.CertificateReady },
+    });
   });
 });

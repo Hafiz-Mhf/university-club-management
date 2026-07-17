@@ -60,4 +60,8 @@ export class NotificationsService {
   cancelEventReminder(eventId: string) {
     return this.queue.remove(reminderJobId(eventId));
   }
+
+  enqueueCertificateReady(organizationId: string, certificateId: string) {
+    return this.queue.add(NotificationJobName.CertificateReady, { organizationId, certificateId });
+  }
 }

@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { MailerService } from './mailer.service';
 import {
+  CertificateJobPayload,
   CommitteeNewRegistrationJobPayload,
   EventReminderJobPayload,
   NOTIFICATION_QUEUE,
@@ -12,6 +13,7 @@ import {
   RegistrationJobPayload,
 } from './notifications.types';
 import {
+  certificateReadyEmail,
   committeeNewRegistrationEmail,
   eventReminderEmail,
   registrationApprovedEmail,
@@ -46,6 +48,7 @@ export class NotificationsProcessor extends WorkerHost {
     if (templateFn) return this.sendRegistrationOutcomeEmail(job, templateFn);
     if (job.name === NotificationJobName.RegistrationNew) return this.sendCommitteeNewRegistrationEmail(job);
     if (job.name === NotificationJobName.EventReminder) return this.sendEventReminders(job);
+    if (job.name === NotificationJobName.CertificateReady) return this.sendCertificateReadyEmail(job);
   }
 
   private async sendRegistrationOutcomeEmail(job: Job, templateFn: OutcomeTemplateFn): Promise<void> {
@@ -108,6 +111,23 @@ export class NotificationsProcessor extends WorkerHost {
         metadata: { kind: job.name },
       });
     }
+  }
+
+  private async sendCertificateReadyEmail(job: Job): Promise<void> {
+    const { organizationId, certificateId } = job.data as CertificateJobPayload;
+    const certificate = await this.prisma.certificate.findUnique({
+      where: { id: certificateId },
+      include: { user: { select: { email: true, fullName: true } }, event: { select: { title: true } } },
+    });
+    if (!certificate) return;
+
+    const { subject, text } = certificateReadyEmail({ fullName: certificate.user.fullName, eventTitle: certificate.event.title });
+    await this.mailer.sendMail({ to: certificate.user.email, subject, text });
+    await this.audit.record({
+      organizationId, action: 'notification.email',
+      targetType: 'Certificate', targetId: certificateId,
+      metadata: { kind: job.name },
+    });
   }
 
   @OnWorkerEvent('failed')
