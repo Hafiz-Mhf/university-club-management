@@ -52,7 +52,6 @@ export class OrganizationsService {
     const data: Prisma.OrganizationUpdateInput = {};
     if (dto.name !== undefined) data.name = dto.name;
     if (dto.description !== undefined) data.description = dto.description;
-    if (dto.logoKey !== undefined) data.logoKey = dto.logoKey;
     if (dto.socialLinks !== undefined) data.socialLinks = dto.socialLinks as Prisma.InputJsonValue;
     if (dto.advisors !== undefined) data.advisors = dto.advisors as Prisma.InputJsonValue;
 
@@ -81,6 +80,9 @@ export class OrganizationsService {
     const data: Prisma.OrganizationUpdateInput = {};
     if (dto.primaryColor !== undefined) {
       data.primaryColor = dto.primaryColor;
+    }
+    if (dto.secondaryColor !== undefined) {
+      data.secondaryColor = dto.secondaryColor;
     }
 
     return this.prisma.$transaction(async (tx) => {

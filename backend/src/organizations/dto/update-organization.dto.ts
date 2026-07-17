@@ -13,10 +13,6 @@ export class UpdateOrganizationDto {
   description?: string;
 
   @IsOptional()
-  @IsString()
-  logoKey?: string;
-
-  @IsOptional()
   socialLinks?: Record<string, string>;
 
   @IsOptional()

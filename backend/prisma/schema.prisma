@@ -100,10 +100,12 @@ model Organization {
   slug           String       @unique
   description    String?
   logoKey        String?
+  bannerKey      String?
   advisors       Json?
   socialLinks    Json?
   storageQuotaMb Int          @default(1024)
   primaryColor   String       @default("#2563eb")
+  secondaryColor String       @default("#1e293b")
   settings       Json?
   memberships    Membership[]
   events         Event[]
