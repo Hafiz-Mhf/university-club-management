@@ -58,4 +58,26 @@ export class FeedbackService {
     if (!response) throw new NotFoundException('No feedback submitted for this event');
     return response;
   }
+
+  async summary(organizationId: string, eventId: string) {
+    const event = await this.prisma.event.findFirst({ where: { id: eventId, organizationId } });
+    if (!event) throw new NotFoundException('Event not found in this organization');
+
+    const responses = await this.prisma.feedbackResponse.findMany({
+      where: { organizationId, eventId },
+      select: { npsScore: true, contentRating: true, organizationRating: true, venueRating: true, comment: true },
+    });
+
+    const count = responses.length;
+    const average = (values: number[]) => (count === 0 ? null : values.reduce((sum, v) => sum + v, 0) / count);
+
+    return {
+      responseCount: count,
+      avgNpsScore: average(responses.map((r) => r.npsScore)),
+      avgContentRating: average(responses.map((r) => r.contentRating)),
+      avgOrganizationRating: average(responses.map((r) => r.organizationRating)),
+      avgVenueRating: average(responses.map((r) => r.venueRating)),
+      comments: responses.map((r) => r.comment).filter((c): c is string => c !== null),
+    };
+  }
 }
