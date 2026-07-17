@@ -3,6 +3,7 @@ import { EventStatus, Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { CertificateGenerationService } from '../certificates/generation/certificate-generation.service';
 import { CreateEventDto } from './dto/create-event.dto';
 import { UpdateEventDto } from './dto/update-event.dto';
 import { MANAGE_EVENTS } from '../rbac/role-groups';
@@ -13,6 +14,7 @@ export class EventsService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly notifications: NotificationsService,
+    private readonly certificateGeneration: CertificateGenerationService,
   ) {}
 
   async create(organizationId: string, dto: CreateEventDto, actorUserId?: string) {
@@ -165,6 +167,7 @@ export class EventsService {
       (s) => s === 'PUBLISHED', actorUserId,
     );
     await this.notifications.cancelEventReminder(eventId);
+    await this.certificateGeneration.enqueueBatchForEvent(organizationId, eventId, actorUserId);
     return updated;
   }
 
