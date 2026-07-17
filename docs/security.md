@@ -549,6 +549,20 @@ Two new nullable `Organization` columns, `bannerKey` and `secondaryColor` (defau
 
 ---
 
+### As built — event feedback + NPS (shipped)
+
+New `backend/src/feedback/` module at `organizations/:orgId/events/:eventId/feedback`. `POST /` (submit) and `GET /me` are eligibility-gated in the service, not role-gated — any member can submit if they were marked `PRESENT` for the event, within 14 days of `Event.endAt`; a duplicate submission (`@@unique([eventId, userId])`) 409s. `GET /summary` is `MANAGE_EVENTS`-gated and returns aggregates only (avg NPS, avg of each 1–5 rating, response count, a bare comment list) — **never `userId` or any submitter identity**, so committee-visible feedback can't be attributed to a person even though the row itself tracks the submitter for eligibility/gating purposes.
+
+**Certificate release gating:** a new per-event opt-in, `Event.requireFeedbackForCertificate` (default `false`, editable only while `DRAFT`/`PUBLISHED` — same edit-lock every other event field already has). When on, `EventsService.complete()` no longer certs every `PRESENT` attendee unconditionally: `CertificateGenerationService.enqueueBatchForEvent()` gained an `onlyWithFeedback` filter, and `complete()` also schedules a delayed BullMQ job (existing `certificates` queue, job id `feedback-window-close-<eventId>`, hyphen separator — BullMQ rejects `:` in custom job ids, same reason `notifications.types.ts` uses one) that, 14 days later, issues certificates to whoever's still missing one regardless of feedback. Every feedback submission against an already-`COMPLETED` gated event re-runs the gated batch check immediately, so a person isn't forced to wait for the 14-day fallback once they submit. Non-gated events are byte-for-byte unchanged — the existing Certificate Generator e2e suite passes untouched.
+
+**Analytics extension:** two new `MANAGE_EVENTS`-gated endpoints on the existing `AnalyticsController` — `GET /analytics/feedback` (per-event NPS/rating averages) and `GET /analytics/feedback-trends?days=` (org-wide day-bucketed trend, same `dayRange`/`windowStart` zero-fill pattern as `getTrends`/`getCommitteeActivity`).
+
+**Audit:** one new action, `feedback.submit` (`targetType: 'FeedbackResponse'`, actor = submitting member). Reads (`/me`, `/summary`, both analytics endpoints) are never audited, per established pattern.
+
+New model: `FeedbackResponse`, added to `TENANT_SCOPED_MODELS`. New column: `Event.requireFeedbackForCertificate`. See `docs/database.md` for the full schema.
+
+---
+
 ## 3. Multi-Tenant Isolation
 
 - Every tenant-owned row carries `organizationId`.

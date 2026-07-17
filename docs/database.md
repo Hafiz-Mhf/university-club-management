@@ -76,6 +76,7 @@ written by every module; ConsentRecord is user+purpose scoped).
 | capacity | int, nullable | `null` = unlimited; capacity enforcement deferred to the Registration module |
 | bannerKey | string, nullable | private storage key; upload flow deferred to the storage module |
 | status | enum `EventStatus` (DRAFT, PUBLISHED, COMPLETED, CANCELLED) | lifecycle, default `DRAFT` |
+| requireFeedbackForCertificate | boolean | default `false` — per-event opt-in gate; certificates wait for feedback when true (see FeedbackResponse). Editable only while `DRAFT`/`PUBLISHED`, same edit-lock as other fields |
 | createdByUserId | uuid, nullable | creator's user id (plain column, no FK relation) |
 | createdAt / updatedAt | timestamp | |
 | — | `@@index([organizationId])` | tenant-scoped queries |
@@ -259,6 +260,41 @@ be browsed then fetched one at a time.
 
 Both `GalleryPhoto` and `Achievement` are in `TENANT_SCOPED_MODELS`.
 
+### FeedbackResponse (shipped)
+| Field | Type | Notes |
+|-------|------|-------|
+| id | uuid (PK) | |
+| eventId | uuid (FK → Event) | |
+| organizationId | uuid | denormalized for scope — flat scalar, no `Organization` relation, mirrors `Certificate`'s exact shape |
+| userId | uuid (FK → User) | submitter |
+| npsScore | int | 0–10, "how likely to recommend" |
+| contentRating | int | 1–5 |
+| organizationRating | int | 1–5 |
+| venueRating | int | 1–5 |
+| comment | string, nullable | optional free text, max 2000 chars |
+| createdAt | timestamp | |
+| — | `@@unique([eventId, userId])` | one submission per person per event |
+| — | `@@index([organizationId])` | tenant-scoped queries |
+
+`FeedbackResponse` is in `TENANT_SCOPED_MODELS`. Submission is eligibility-gated
+in `FeedbackService`, not role-gated: any member with `PRESENT` attendance for
+the event can submit, from whenever attendance was marked until 14 days after
+`Event.endAt`. Committee-facing reads (`GET .../feedback/summary`, and the two
+analytics endpoints below) return aggregates and bare comment text only — never
+`userId` — so honest feedback isn't attributable to a person.
+
+`Event.requireFeedbackForCertificate` (see Event above) links this table to
+Certificate Generator: when true, `EventsService.complete()` certs only
+`PRESENT` attendees who already have a `FeedbackResponse`, and schedules a
+14-day delayed BullMQ job (`certificates` queue, job id
+`feedback-window-close-<eventId>`) that issues certificates to everyone still
+missing one once the window closes, regardless of feedback. Every feedback
+submission for an already-`COMPLETED` gated event immediately re-checks and
+unlocks that person's certificate, rather than waiting for the delayed job.
+Analytics (`GET /analytics/feedback`, `GET /analytics/feedback-trends?days=`)
+surface per-event and org-wide NPS/rating averages, mirroring the existing
+`getTrends`/`getCommitteeActivity` day-bucketing pattern.
+
 ### ConsentRecord (PDPA) (shipped)
 | Field | Type | Notes |
 |-------|------|-------|
@@ -291,6 +327,7 @@ User 1─* Membership *─1 Organization
 Organization 1─* Event 1─1 RegistrationForm 1─* FormField
 Event 1─* Registration 1─1 Attendance
 Event 1─* Certificate *─1 User
+Event 1─* FeedbackResponse *─1 User
 User 1─* ConsentRecord
 Organization 1─* AuditLog
 ```
@@ -311,6 +348,5 @@ Organization 1─* AuditLog
 
 ## 5. Phase 2+ Additions (not built yet)
 
-FileRepository, MeetingMinutes, Asset, PublicPageConfig, FeedbackResponse,
 Budget, Sponsor, Payment — each org-scoped, added when their phase lands.
 Keep this doc synced as models are implemented.
