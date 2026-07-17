@@ -196,3 +196,52 @@ describe('OrganizationsService logo/banner upload', () => {
     expect(first!.bannerUrl).not.toBeNull();
   });
 });
+
+describe('OrganizationsService logo/banner delete', () => {
+  let orgs: OrganizationsService;
+  let prisma: PrismaService;
+  let auth: AuthService;
+  let userId: string;
+  let orgId: string;
+  const png = () => Buffer.from('89504e470d0a1a0a', 'hex');
+
+  beforeAll(async () => {
+    const moduleRef = await Test.createTestingModule({
+      imports: [ConfigModule.forRoot({ isGlobal: true }), JwtModule.register({ secret: 'test' })],
+      providers: [OrganizationsService, AuthService, PrismaService, AuditService, RefreshTokenRepository, StorageService],
+    }).compile();
+    orgs = moduleRef.get(OrganizationsService);
+    prisma = moduleRef.get(PrismaService);
+    auth = moduleRef.get(AuthService);
+    await prisma.onModuleInit();
+    const storage = moduleRef.get(StorageService);
+    await storage.onModuleInit();
+    const u = await auth.register({ email: `orgdelete-${Date.now()}@test.io`, password: 'password123', fullName: 'Pres', consent: true });
+    userId = u.id;
+    const org = await orgs.create(userId, { name: 'DeleteOrg', slug: `deleteorg-${Date.now()}` });
+    orgId = org.id;
+  });
+  afterAll(async () => {
+    await prisma.membership.deleteMany({ where: { userId, organizationId: orgId } });
+    await prisma.auditLog.deleteMany({ where: { organizationId: orgId } });
+    await prisma.organization.delete({ where: { id: orgId } });
+    await prisma.consentRecord.deleteMany({ where: { userId } });
+    await prisma.user.delete({ where: { id: userId } });
+    await prisma.$disconnect();
+  });
+
+  it('clears the logo and removes the storage object', async () => {
+    await orgs.uploadLogo(orgId, { mimetype: 'image/png', size: 8, buffer: png() }, userId);
+    const result = await orgs.deleteLogo(orgId, userId);
+    expect(result!.logoUrl).toBeNull();
+    const row = await prisma.organization.findUnique({ where: { id: orgId } });
+    expect(row!.logoKey).toBeNull();
+  });
+
+  it('is idempotent — deleting an already-absent logo is a no-op with no new audit row', async () => {
+    const before = await prisma.auditLog.count({ where: { organizationId: orgId, action: 'organization.logo.delete' } });
+    await orgs.deleteLogo(orgId, userId);
+    const after = await prisma.auditLog.count({ where: { organizationId: orgId, action: 'organization.logo.delete' } });
+    expect(after).toBe(before);
+  });
+});

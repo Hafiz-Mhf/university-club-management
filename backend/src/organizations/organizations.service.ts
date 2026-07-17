@@ -106,6 +106,41 @@ export class OrganizationsService {
     return this.uploadBrandingImage(organizationId, 'banner', file, actorUserId);
   }
 
+  private async deleteBrandingImage(organizationId: string, kind: BrandingKind, actorUserId: string) {
+    const organization = await this.prisma.organization.findUnique({ where: { id: organizationId } });
+    if (!organization) throw new NotFoundException('Organization not found');
+
+    const field = kind === 'logo' ? 'logoKey' : 'bannerKey';
+    const key = kind === 'logo' ? organization.logoKey : organization.bannerKey;
+    if (!key) return this.findOne(organizationId);
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.organization.update({ where: { id: organizationId }, data: { [field]: null } });
+      await this.audit.record(
+        {
+          organizationId,
+          actorUserId,
+          action: `organization.${kind}.delete`,
+          targetType: 'Organization',
+          targetId: organizationId,
+          metadata: { key },
+        },
+        tx,
+      );
+    });
+
+    await this.storage.deleteObject(key);
+    return this.findOne(organizationId);
+  }
+
+  deleteLogo(organizationId: string, actorUserId: string) {
+    return this.deleteBrandingImage(organizationId, 'logo', actorUserId);
+  }
+
+  deleteBanner(organizationId: string, actorUserId: string) {
+    return this.deleteBrandingImage(organizationId, 'banner', actorUserId);
+  }
+
   listForUser(userId: string) {
     return this.prisma.organization.findMany({
       where: { memberships: { some: { userId } } },
