@@ -575,6 +575,46 @@ No new Prisma models or columns. `TENANT_SCOPED_MODELS` unchanged.
 
 ---
 
+### As built — consent-versioned re-prompt (shipped)
+
+The tenth and final Phase 2 roadmap item. No new endpoint on its own module —
+enforcement lives in `JwtAuthGuard` (`backend/src/auth/guards/jwt-auth.guard.ts`),
+which already sits on every authenticated route in the codebase. Its
+overridden `canActivate()` runs Passport's JWT check first, then — unless the
+route carries the new `@SkipConsentCheck()` metadata (`Reflector`-based, same
+mechanism `RolesGuard` already uses for `@Roles()`) — looks up the caller's
+most recent `ConsentRecord{purpose: 'account'}` via the shared
+`isAccountConsentStale(prisma, userId)` helper (`backend/src/pdpa/consent-status.util.ts`).
+A version mismatch, or no record at all, is a hard `403`. `PdpaController`
+carries `@SkipConsentCheck()` at the class level — a user who won't accept the
+new policy can still view consent history, export their data, or delete their
+account; they are never fully locked out.
+
+**Cure endpoint:** `POST /me/consent` (also `@SkipConsentCheck()`, same
+controller) inserts a fresh `ConsentRecord{purpose: 'account', policyVersion:
+CURRENT_POLICY_VERSION, ipAddress: req.ip}` — the stale row is left in place as
+history, never mutated. Returns the same `{id, purpose, policyVersion,
+grantedAt}` shape `GET /me/consents` already uses.
+
+**Proactive signal:** `AuthService.issueTokens()` (shared by `login()` and
+`refresh()`) calls the same `isAccountConsentStale` helper and adds
+`consentStale: boolean` to both responses, so the frontend can route to a
+re-consent screen without waiting for a request to 403 first.
+
+**Audit:** one new action, `pdpa.consent.renew` (`targetType: 'User'`,
+`organizationId: null` — same cross-org shape as `pdpa.export`/`pdpa.delete`).
+The staleness check itself (every blocked/allowed request) is not audited —
+matching the existing "reads/guard checks are not separately logged" pattern;
+only the mutation that cures staleness is.
+
+No new Prisma model or column — `ConsentRecord` already carried everything
+needed. `ConsentRecord` remains outside `TENANT_SCOPED_MODELS` (user-scoped,
+not org-scoped, unchanged from every other feature that has touched it).
+
+With this item shipped, no Phase 2 items remain on `docs/roadmap.md`.
+
+---
+
 ## 3. Multi-Tenant Isolation
 
 - Every tenant-owned row carries `organizationId`.
@@ -613,7 +653,7 @@ No new Prisma models or columns. `TENANT_SCOPED_MODELS` unchanged.
 | Right to access | "Export my data" endpoint returns all personal data for the user |
 | Right to erasure | "Delete/anonymize request" → soft delete + anonymization job |
 | Retention | Configurable retention windows; scheduled purge jobs |
-| Transparency | Privacy policy versioned; consent re-prompt on version change (Phase 2) |
+| Transparency | Privacy policy versioned; consent re-prompt on version change (shipped — `JwtAuthGuard`-enforced, see §2 "consent-versioned re-prompt") |
 | Security | Encryption at rest + transit, hashed passwords, secure sessions |
 
 Personal data is never exposed across tenants and never returned in logs.
