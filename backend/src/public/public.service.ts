@@ -22,7 +22,7 @@ export class PublicService {
   private async requireOrganization(organizationId: string) {
     const organization = await this.prisma.organization.findUnique({
       where: { id: organizationId },
-      select: { id: true, name: true, description: true, logoKey: true, primaryColor: true, socialLinks: true, advisors: true },
+      select: { id: true, name: true, description: true, logoKey: true, bannerKey: true, primaryColor: true, socialLinks: true, advisors: true },
     });
     if (!organization) throw new NotFoundException('Organization not found');
     return organization;
@@ -33,11 +33,15 @@ export class PublicService {
     const logoUrl = organization.logoKey
       ? await this.storage.getSignedDownloadUrl(organization.logoKey, SIGNED_URL_TTL_SECONDS)
       : null;
+    const bannerUrl = organization.bannerKey
+      ? await this.storage.getSignedDownloadUrl(organization.bannerKey, SIGNED_URL_TTL_SECONDS)
+      : null;
     const upcomingEvents = await this.events.listPublicUpcoming(organizationId);
     return {
       name: organization.name,
       description: organization.description,
       logoUrl,
+      bannerUrl,
       primaryColor: organization.primaryColor,
       socialLinks: organization.socialLinks,
       advisors: organization.advisors,

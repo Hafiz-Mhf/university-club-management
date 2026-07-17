@@ -45,6 +45,21 @@ describe('Public profile (e2e)', () => {
     expect(res.body.settings).toBeUndefined();
   });
 
+  it('reflects a fetchable bannerUrl after the committee uploads one', async () => {
+    await request(app.getHttpServer())
+      .post(`/organizations/${orgId}/banner`)
+      .set('Authorization', `Bearer ${presToken}`)
+      .attach('file', Buffer.from('89504e470d0a1a0a', 'hex'), { filename: 'banner.png', contentType: 'image/png' })
+      .expect(201);
+
+    const res = await request(app.getHttpServer())
+      .get(`/public/organizations/${orgId}/profile`)
+      .expect(200);
+    expect(res.body.bannerUrl).toBeTruthy();
+    const fetched = await fetch(res.body.bannerUrl);
+    expect(fetched.status).toBe(200);
+  });
+
   it('404 for a nonexistent orgId', async () => {
     await request(app.getHttpServer())
       .get('/public/organizations/00000000-0000-0000-0000-000000000000/profile')
