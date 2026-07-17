@@ -77,6 +77,7 @@ model User {
   registrations   Registration[]
   consentRecords  ConsentRecord[]
   certificates    Certificate[]
+  feedbackResponses FeedbackResponse[]
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
   deletedAt    DateTime?
@@ -149,12 +150,14 @@ model Event {
   capacity        Int?
   bannerKey       String?
   status          EventStatus  @default(DRAFT)
+  requireFeedbackForCertificate Boolean @default(false)
   createdByUserId String?
   organization    Organization @relation(fields: [organizationId], references: [id])
   registrationForm RegistrationForm?
   registrations    Registration[]
   attendances      Attendance[]
   certificates    Certificate[]
+  feedbackResponses FeedbackResponse[]
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
 
@@ -231,6 +234,24 @@ model Certificate {
   uploadedByUserId String
   downloads        CertificateDownload[]
   createdAt        DateTime @default(now())
+
+  @@unique([eventId, userId])
+  @@index([organizationId])
+}
+
+model FeedbackResponse {
+  id                 String   @id @default(uuid())
+  eventId            String
+  event              Event    @relation(fields: [eventId], references: [id])
+  organizationId     String
+  userId             String
+  user               User     @relation(fields: [userId], references: [id])
+  npsScore           Int
+  contentRating      Int
+  organizationRating Int
+  venueRating        Int
+  comment            String?
+  createdAt          DateTime @default(now())
 
   @@unique([eventId, userId])
   @@index([organizationId])
