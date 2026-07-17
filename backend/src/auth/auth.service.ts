@@ -9,6 +9,7 @@ import { LoginDto } from './dto/login.dto';
 import { RefreshTokenRepository } from './refresh-token.repository';
 import { sha256 } from './token.util';
 import { CURRENT_POLICY_VERSION } from '../pdpa/policy-version';
+import { isAccountConsentStale } from '../pdpa/consent-status.util';
 
 @Injectable()
 export class AuthService {
@@ -36,7 +37,7 @@ export class AuthService {
     return { id: user.id, email: user.email };
   }
 
-  async login(dto: LoginDto): Promise<{ accessToken: string; refreshToken: string }> {
+  async login(dto: LoginDto): Promise<{ accessToken: string; refreshToken: string; consentStale: boolean }> {
     const user = await this.prisma.user.findUnique({ where: { email: dto.email } });
     if (!user || user.deletedAt) throw new UnauthorizedException('Invalid credentials');
     const ok = await argon2.verify(user.passwordHash, dto.password);
@@ -63,10 +64,11 @@ export class AuthService {
       sha256(refreshToken),
       this.refreshExpiryDate(refreshTtl),
     );
-    return { accessToken, refreshToken };
+    const consentStale = await isAccountConsentStale(this.prisma, user.id);
+    return { accessToken, refreshToken, consentStale };
   }
 
-  async refresh(refreshToken: string): Promise<{ accessToken: string; refreshToken: string }> {
+  async refresh(refreshToken: string): Promise<{ accessToken: string; refreshToken: string; consentStale: boolean }> {
     let payload: { sub: string; email: string };
     try {
       payload = await this.jwt.verifyAsync(refreshToken, {

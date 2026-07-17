@@ -288,4 +288,89 @@ describe('PDPA (e2e)', () => {
         .set('Authorization', `Bearer ${token}`).expect(204);
     });
   });
+
+  describe('consent-versioned re-prompt', () => {
+    it('a freshly registered user is never blocked', async () => {
+      const email = `pdpa-fresh-${Date.now()}@test.io`;
+      const token = await registerAndLogin(email);
+      await request(app.getHttpServer()).get('/organizations')
+        .set('Authorization', `Bearer ${token}`).expect(200);
+    });
+
+    it('blocks an authenticated request when the account consent is stale', async () => {
+      const email = `pdpa-stale-${Date.now()}@test.io`;
+      const token = await registerAndLogin(email);
+      const user = await prisma.user.findUnique({ where: { email } });
+      await prisma.consentRecord.updateMany({
+        where: { userId: user!.id, purpose: 'account' },
+        data: { policyVersion: 'v0-old' },
+      });
+
+      await request(app.getHttpServer()).get('/organizations')
+        .set('Authorization', `Bearer ${token}`).expect(403);
+    });
+
+    it('PdpaController routes stay reachable while blocked', async () => {
+      const email = `pdpa-blocked-pdpa-${Date.now()}@test.io`;
+      const token = await registerAndLogin(email);
+      const user = await prisma.user.findUnique({ where: { email } });
+      await prisma.consentRecord.updateMany({
+        where: { userId: user!.id, purpose: 'account' },
+        data: { policyVersion: 'v0-old' },
+      });
+
+      await request(app.getHttpServer()).get('/me/consents')
+        .set('Authorization', `Bearer ${token}`).expect(200);
+      await request(app.getHttpServer()).get('/me/export')
+        .set('Authorization', `Bearer ${token}`).expect(200);
+    });
+
+    it('POST /me/consent unblocks a stale user and audits pdpa.consent.renew', async () => {
+      const email = `pdpa-renew-${Date.now()}@test.io`;
+      const token = await registerAndLogin(email);
+      const user = await prisma.user.findUnique({ where: { email } });
+      await prisma.consentRecord.updateMany({
+        where: { userId: user!.id, purpose: 'account' },
+        data: { policyVersion: 'v0-old' },
+      });
+      await request(app.getHttpServer()).get('/organizations')
+        .set('Authorization', `Bearer ${token}`).expect(403);
+
+      const res = await request(app.getHttpServer()).post('/me/consent')
+        .set('Authorization', `Bearer ${token}`).expect(201);
+      expect(res.body.purpose).toBe('account');
+      expect(res.body.policyVersion).toBe('v1');
+
+      await request(app.getHttpServer()).get('/organizations')
+        .set('Authorization', `Bearer ${token}`).expect(200);
+
+      const auditRows = await prisma.auditLog.findMany({
+        where: { organizationId: { equals: null }, actorUserId: user!.id, action: 'pdpa.consent.renew' },
+      });
+      expect(auditRows).toHaveLength(1);
+    });
+
+    it('login and refresh responses reflect consentStale', async () => {
+      const email = `pdpa-flag-${Date.now()}@test.io`;
+      await request(app.getHttpServer()).post('/auth/register')
+        .send({ email, password: 'password123', fullName: email, consent: true });
+      const freshLogin = await request(app.getHttpServer()).post('/auth/login')
+        .send({ email, password: 'password123' }).expect(201);
+      expect(freshLogin.body.consentStale).toBe(false);
+
+      const user = await prisma.user.findUnique({ where: { email } });
+      await prisma.consentRecord.updateMany({
+        where: { userId: user!.id, purpose: 'account' },
+        data: { policyVersion: 'v0-old' },
+      });
+
+      const staleLogin = await request(app.getHttpServer()).post('/auth/login')
+        .send({ email, password: 'password123' }).expect(201);
+      expect(staleLogin.body.consentStale).toBe(true);
+
+      const refreshRes = await request(app.getHttpServer()).post('/auth/refresh')
+        .send({ refreshToken: staleLogin.body.refreshToken }).expect(201);
+      expect(refreshRes.body.consentStale).toBe(true);
+    });
+  });
 });

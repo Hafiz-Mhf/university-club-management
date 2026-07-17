@@ -5,6 +5,7 @@ import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { AuditService } from '../audit/audit.service';
+import { CURRENT_POLICY_VERSION } from './policy-version';
 
 const SIGNED_URL_TTL_SECONDS = 300;
 
@@ -24,6 +25,19 @@ export class PdpaService {
       orderBy: { grantedAt: 'desc' },
       select: { id: true, purpose: true, policyVersion: true, grantedAt: true },
     });
+  }
+
+  async renewConsent(userId: string, ipAddress: string | undefined) {
+    const record = await this.prisma.consentRecord.create({
+      data: { userId, purpose: 'account', policyVersion: CURRENT_POLICY_VERSION, ipAddress },
+    });
+    await this.audit.record({
+      actorUserId: userId,
+      action: 'pdpa.consent.renew',
+      targetType: 'User',
+      targetId: userId,
+    });
+    return { id: record.id, purpose: record.purpose, policyVersion: record.policyVersion, grantedAt: record.grantedAt };
   }
 
   async export(userId: string) {
