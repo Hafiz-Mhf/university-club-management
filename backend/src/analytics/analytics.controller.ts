@@ -46,4 +46,18 @@ export class AnalyticsController {
   getCommitteeActivity(@OrgId() orgId: string, @Query('days') daysRaw?: string) {
     return this.analytics.getCommitteeActivity(orgId, parseDaysParam(daysRaw));
   }
+
+  @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
+  @Roles(...MANAGE_EVENTS)
+  @Get('feedback')
+  getFeedback(@OrgId() orgId: string) {
+    return this.analytics.getFeedback(orgId);
+  }
+
+  @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
+  @Roles(...MANAGE_EVENTS)
+  @Get('feedback-trends')
+  getFeedbackTrends(@OrgId() orgId: string, @Query('days') daysRaw?: string) {
+    return this.analytics.getFeedbackTrends(orgId, parseDaysParam(daysRaw));
+  }
 }

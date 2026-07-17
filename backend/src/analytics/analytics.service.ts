@@ -117,4 +117,65 @@ export class AnalyticsService {
 
     return { data };
   }
+
+  async getFeedback(organizationId: string) {
+    const responses = await this.prisma.feedbackResponse.findMany({
+      where: { organizationId },
+      select: { eventId: true, npsScore: true, contentRating: true, organizationRating: true, venueRating: true },
+    });
+
+    const byEvent = new Map<string, typeof responses>();
+    for (const r of responses) {
+      const list = byEvent.get(r.eventId) ?? [];
+      list.push(r);
+      byEvent.set(r.eventId, list);
+    }
+
+    const data = Array.from(byEvent.entries()).map(([eventId, rows]) => {
+      const count = rows.length;
+      const average = (values: number[]) => values.reduce((sum, v) => sum + v, 0) / count;
+      return {
+        eventId,
+        responseCount: count,
+        avgNpsScore: average(rows.map((r) => r.npsScore)),
+        avgContentRating: average(rows.map((r) => r.contentRating)),
+        avgOrganizationRating: average(rows.map((r) => r.organizationRating)),
+        avgVenueRating: average(rows.map((r) => r.venueRating)),
+      };
+    });
+
+    return { data };
+  }
+
+  async getFeedbackTrends(organizationId: string, days: number) {
+    const buckets = dayRange(days);
+    const start = windowStart(days);
+
+    const responses = await this.prisma.feedbackResponse.findMany({
+      where: { organizationId, createdAt: { gte: start } },
+      select: { createdAt: true, npsScore: true, contentRating: true, organizationRating: true, venueRating: true },
+    });
+
+    const byDay = new Map(buckets.map((d) => [d, [] as typeof responses]));
+    for (const r of responses) {
+      const key = dateKey(r.createdAt);
+      if (byDay.has(key)) byDay.get(key)!.push(r);
+    }
+
+    const trend = buckets.map((date) => {
+      const rows = byDay.get(date)!;
+      const count = rows.length;
+      const average = (values: number[]) => (count === 0 ? null : values.reduce((sum, v) => sum + v, 0) / count);
+      return {
+        date,
+        responseCount: count,
+        avgNpsScore: average(rows.map((r) => r.npsScore)),
+        avgContentRating: average(rows.map((r) => r.contentRating)),
+        avgOrganizationRating: average(rows.map((r) => r.organizationRating)),
+        avgVenueRating: average(rows.map((r) => r.venueRating)),
+      };
+    });
+
+    return { trend };
+  }
 }
