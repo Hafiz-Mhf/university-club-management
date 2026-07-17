@@ -324,5 +324,30 @@ describe('PDPA (e2e)', () => {
       await request(app.getHttpServer()).get('/me/export')
         .set('Authorization', `Bearer ${token}`).expect(200);
     });
+
+    it('POST /me/consent unblocks a stale user and audits pdpa.consent.renew', async () => {
+      const email = `pdpa-renew-${Date.now()}@test.io`;
+      const token = await registerAndLogin(email);
+      const user = await prisma.user.findUnique({ where: { email } });
+      await prisma.consentRecord.updateMany({
+        where: { userId: user!.id, purpose: 'account' },
+        data: { policyVersion: 'v0-old' },
+      });
+      await request(app.getHttpServer()).get('/organizations')
+        .set('Authorization', `Bearer ${token}`).expect(403);
+
+      const res = await request(app.getHttpServer()).post('/me/consent')
+        .set('Authorization', `Bearer ${token}`).expect(201);
+      expect(res.body.purpose).toBe('account');
+      expect(res.body.policyVersion).toBe('v1');
+
+      await request(app.getHttpServer()).get('/organizations')
+        .set('Authorization', `Bearer ${token}`).expect(200);
+
+      const auditRows = await prisma.auditLog.findMany({
+        where: { organizationId: { equals: null }, actorUserId: user!.id, action: 'pdpa.consent.renew' },
+      });
+      expect(auditRows).toHaveLength(1);
+    });
   });
 });
