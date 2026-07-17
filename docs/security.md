@@ -507,6 +507,20 @@ Anonymous event registration remains out of scope — the public profile only su
 
 ---
 
+### As built — email notifications (shipped)
+
+No new endpoints — purely internal side effects of existing actions, via a new `NotificationsModule` (`backend/src/notifications/`) and a BullMQ queue (`notifications`) backed by the `redis` container (first feature to actually use it).
+
+Six triggers, one email each: `RegistrationsService.register()` resolving to `APPROVED` or `WAITLISTED` (registrant), `RegistrationsService.reject()` (registrant), the waitlist auto-promotion cascade inside `resolve()` (promoted registrant), every new registration (fan-out — one email per `MANAGE_EVENTS`-tier ACTIVE org member, for visibility, not a required approval step), and a delayed `event.reminder` job scheduled 24h before `Event.startAt` on `publish()`, rescheduled on `update()` when `startAt` changes, and cancelled on `cancel()`/`complete()` (deterministic job id `` `reminder-<eventId>` `` — not `reminder:<eventId>` as originally specced; BullMQ rejects `:` in custom job ids).
+
+Plain-text templates only (`notifications/templates.ts`), sent via `nodemailer` (`MailerService`) against a `mailpit` dev container (SMTP `:1025`, web UI `:8025`) — no HTML, no opt-out (all six triggers are transactional, not marketing).
+
+**Audit:** one new action, `notification.email` (`targetType: 'Registration'`, metadata `{ kind }` only — never the recipient's email address or message body, per the "never log personal data" rule). Written by the queue worker only on successful send; failed sends retry via BullMQ defaults and are logged (not audited). These actor-less rows are excluded from the Basic Dashboard's capped `activityFeed` (they'd crowd out actor activity there) but remain fully queryable via `GET /organizations/:orgId/audit-logs`.
+
+No new Prisma models. `TENANT_SCOPED_MODELS` unchanged.
+
+---
+
 ## 3. Multi-Tenant Isolation
 
 - Every tenant-owned row carries `organizationId`.
