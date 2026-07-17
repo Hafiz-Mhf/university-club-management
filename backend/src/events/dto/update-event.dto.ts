@@ -1,4 +1,4 @@
-import { IsInt, IsISO8601, IsOptional, IsString, Min, MinLength, ValidateIf } from 'class-validator';
+import { IsBoolean, IsInt, IsISO8601, IsOptional, IsString, Min, MinLength, ValidateIf } from 'class-validator';
 
 export class UpdateEventDto {
   @ValidateIf((o) => o.title !== undefined) @IsString() @MinLength(2) title?: string;
@@ -7,4 +7,5 @@ export class UpdateEventDto {
   @IsOptional() @IsISO8601() startAt?: string;
   @IsOptional() @IsISO8601() endAt?: string;
   @IsOptional() @IsInt() @Min(1) capacity?: number;
+  @IsOptional() @IsBoolean() requireFeedbackForCertificate?: boolean;
 }

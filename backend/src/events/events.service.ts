@@ -88,6 +88,7 @@ export class EventsService {
         capacity: dto.capacity,
         startAt: dto.startAt ? startAt : undefined,
         endAt: dto.endAt ? endAt : undefined,
+        requireFeedbackForCertificate: dto.requireFeedbackForCertificate,
       };
       const fields = Object.keys(data).filter((k) => (data as Record<string, unknown>)[k] !== undefined);
 
@@ -167,7 +168,12 @@ export class EventsService {
       (s) => s === 'PUBLISHED', actorUserId,
     );
     await this.notifications.cancelEventReminder(eventId);
-    await this.certificateGeneration.enqueueBatchForEvent(organizationId, eventId, actorUserId);
+    if (updated.requireFeedbackForCertificate) {
+      await this.certificateGeneration.enqueueBatchForEvent(organizationId, eventId, actorUserId, { onlyWithFeedback: true });
+      await this.certificateGeneration.scheduleFeedbackWindowClose(organizationId, eventId, updated.endAt);
+    } else {
+      await this.certificateGeneration.enqueueBatchForEvent(organizationId, eventId, actorUserId);
+    }
     return updated;
   }
 
