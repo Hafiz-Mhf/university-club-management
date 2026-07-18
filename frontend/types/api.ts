@@ -117,6 +117,12 @@ export interface Registration {
 export type FormFieldType = 'TEXT' | 'TEXTAREA' | 'SELECT' | 'CHECKBOX';
 
 export interface FormField {
+  // Present on fields read back from GET (assigned by the backend on
+  // save) — absent on fields still being edited client-side before the
+  // first Save. Registration answers are keyed by this id, not by label:
+  // full-replace PUT regenerates ids, so a re-saved form's old answers
+  // become orphaned by design (backend behavior, not a frontend concern).
+  id?: string;
   label: string;
   type: FormFieldType;
   required: boolean;

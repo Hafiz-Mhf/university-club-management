@@ -1,13 +1,19 @@
 import { z } from 'zod';
 import type { FormField } from '@/types/api';
 
+// Fields fetched from GET always carry the backend-assigned id — answers
+// are keyed by that id, never by label (RegistrationsService.validateAnswers
+// reads `answers[field.id]`; a re-saved form's ids are regenerated, which
+// is why this only accepts already-persisted fields, not editor drafts).
+export type SavedFormField = FormField & { id: string };
+
 // Mirrors backend RegistrationsService.validateAnswers exactly — built at
 // runtime from the event's actual form so validation matches what the
 // backend will accept.
-export function buildAnswerSchema(fields: FormField[]) {
+export function buildAnswerSchema(fields: SavedFormField[]) {
   const shape: Record<string, z.ZodType> = {};
   for (const field of fields) {
-    const key = field.label;
+    const key = field.id;
     if (field.type === 'CHECKBOX') {
       // Native checkbox inputs bound via RHF register() yield a boolean —
       // validate the boolean directly. Converted to a 'true'/'false'

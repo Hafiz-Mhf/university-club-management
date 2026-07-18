@@ -17,7 +17,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useRegisterForEvent } from '@/features/registrations/use-registrations';
 import { useRegistrationForm } from '@/features/registrations/use-registration-form';
-import { buildAnswerSchema } from '@/features/registrations/schemas';
+import { buildAnswerSchema, type SavedFormField } from '@/features/registrations/schemas';
 import { ApiError } from '@/lib/api';
 
 interface RegisterDialogProps {
@@ -31,7 +31,8 @@ interface RegisterDialogProps {
 export function RegisterDialog({ orgId, eventId, eventTitle, open, onOpenChange }: RegisterDialogProps) {
   const formQuery = useRegistrationForm(orgId, eventId);
   const register = useRegisterForEvent(orgId, eventId);
-  const fields = formQuery.data?.fields ?? [];
+  // Fields read back from GET always carry the backend-assigned id.
+  const fields = (formQuery.data?.fields ?? []) as SavedFormField[];
 
   const form = useForm<Record<string, unknown>>({
     resolver: zodResolver(buildAnswerSchema(fields)),
@@ -49,11 +50,12 @@ export function RegisterDialog({ orgId, eventId, eventTitle, open, onOpenChange 
     // buildAnswerSchema validates CHECKBOX as boolean (native RHF checkbox
     // binding); the backend's answers shape is string-valued, so convert
     // here, after validation, before the request body is built.
+    // Backend reads answers keyed by field id, not label — see SavedFormField.
     const answers: Record<string, string> = {};
     for (const field of fields) {
-      const v = values[field.label];
+      const v = values[field.id];
       if (v === undefined || v === null || v === '') continue;
-      answers[field.label] = typeof v === 'boolean' ? String(v) : String(v);
+      answers[field.id] = typeof v === 'boolean' ? String(v) : String(v);
     }
     register.mutate(answers, { onSuccess: () => onOpenChange(false) });
   });
@@ -74,21 +76,21 @@ export function RegisterDialog({ orgId, eventId, eventTitle, open, onOpenChange 
 
         <form onSubmit={submit} className="flex flex-col gap-4" noValidate>
           {fields.map((field) => {
-            const error = form.formState.errors[field.label]?.message as string | undefined;
+            const error = form.formState.errors[field.id]?.message as string | undefined;
             return (
-              <div key={field.label} className="flex flex-col gap-1.5">
-                <Label htmlFor={field.label}>
+              <div key={field.id} className="flex flex-col gap-1.5">
+                <Label htmlFor={field.id}>
                   {field.label}
                   {field.required && ' *'}
                 </Label>
-                {field.type === 'TEXT' && <Input id={field.label} {...form.register(field.label)} />}
+                {field.type === 'TEXT' && <Input id={field.id} {...form.register(field.id)} />}
                 {field.type === 'TEXTAREA' && (
-                  <Textarea id={field.label} rows={3} {...form.register(field.label)} />
+                  <Textarea id={field.id} rows={3} {...form.register(field.id)} />
                 )}
                 {field.type === 'SELECT' && (
                   <select
-                    id={field.label}
-                    {...form.register(field.label)}
+                    id={field.id}
+                    {...form.register(field.id)}
                     className="h-9 rounded-md border border-input bg-surface px-2.5 text-sm"
                   >
                     <option value="">Select…</option>
@@ -100,7 +102,7 @@ export function RegisterDialog({ orgId, eventId, eventTitle, open, onOpenChange 
                   </select>
                 )}
                 {field.type === 'CHECKBOX' && (
-                  <input id={field.label} type="checkbox" {...form.register(field.label)} />
+                  <input id={field.id} type="checkbox" {...form.register(field.id)} />
                 )}
                 {error && <p className="text-sm text-danger">{error}</p>}
               </div>
