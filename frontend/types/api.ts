@@ -81,6 +81,25 @@ export interface DashboardSummary {
   }[];
 }
 
+export type EventStatus = 'DRAFT' | 'PUBLISHED' | 'COMPLETED' | 'CANCELLED';
+
+export interface Event {
+  id: string;
+  organizationId: string;
+  title: string;
+  description: string | null;
+  venue: string | null;
+  startAt: string;
+  endAt: string;
+  capacity: number | null;
+  bannerKey: string | null;
+  status: EventStatus;
+  requireFeedbackForCertificate: boolean;
+  createdByUserId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ConsentRecordItem {
   id: string;
   purpose: string;
