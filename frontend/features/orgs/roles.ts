@@ -28,3 +28,11 @@ export const MANAGE_MEMBERS_ROLES: MembershipRole[] = [
 export function canManageMembers(role: MembershipRole): boolean {
   return MANAGE_MEMBERS_ROLES.includes(role);
 }
+
+// Mirrors backend MANAGE_ROLES — President/VP only, gates role changes and
+// removal (stricter than MANAGE_MEMBERS, which excludes only COMMITTEE).
+export const MANAGE_ROLES_ROLES: MembershipRole[] = ['PRESIDENT', 'VICE_PRESIDENT'];
+
+export function canManageRoles(role: MembershipRole): boolean {
+  return MANAGE_ROLES_ROLES.includes(role);
+}

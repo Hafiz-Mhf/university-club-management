@@ -13,6 +13,9 @@ export interface RegisteredUser {
   email: string;
 }
 
+// Mirrors backend prisma Role enum exactly — 9 values. ALUMNI is a
+// MemberStatus, never a role (a stray 'ALUMNI' union member here was a
+// real bug fixed in Slice 4).
 export type MembershipRole =
   | 'PRESIDENT'
   | 'VICE_PRESIDENT'
@@ -22,8 +25,9 @@ export type MembershipRole =
   | 'COMMITTEE'
   | 'VOLUNTEER'
   | 'PARTICIPANT'
-  | 'ADVISOR'
-  | 'ALUMNI';
+  | 'ADVISOR';
+
+export type MemberStatus = 'ACTIVE' | 'ALUMNI';
 
 export interface Organization {
   id: string;
@@ -39,7 +43,7 @@ export interface Organization {
 export interface MyMembership {
   id: string;
   role: MembershipRole;
-  status: 'ACTIVE' | 'INACTIVE' | 'ALUMNI';
+  status: MemberStatus;
 }
 
 export interface DashboardSummary {
@@ -144,4 +148,26 @@ export interface ConsentRecordItem {
   purpose: string;
   policyVersion: string;
   grantedAt: string;
+}
+
+export interface Member {
+  id: string;
+  userId: string;
+  organizationId: string;
+  role: MembershipRole;
+  status: MemberStatus;
+  studentId: string | null;
+  faculty: string | null;
+  programme: string | null;
+  intake: string | null;
+  phone: string | null;
+  // null until the first role change (backend jsonb column defaults null,
+  // entries prepended on each change).
+  committeeHistory: { role: MembershipRole; until: string }[] | null;
+  joinedAt: string;
+  user: {
+    id: string;
+    fullName: string;
+    email: string;
+  };
 }
