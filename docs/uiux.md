@@ -208,3 +208,106 @@ component rendering" bar as Slice 1. Page-level correctness verified live
 →delete cycle, DRAFT-404 as a second account, both-theme screenshots. No new
 bugs found during that pass (Task 5 has no commit as a result — nothing to
 fix). Backend baseline unchanged: 101 unit / 326 e2e.
+
+## Slice 3 — Registrations (shipped)
+
+Committee-defined registration forms, self-registration (register / view
+status / cancel), and committee registration management (list + reject).
+Carved out of Slice 2 by its "Events only" scoping decision. No new backend
+endpoints — verified the existing `RegistrationsController`/
+`RegistrationFormController` contract during brainstorming before writing
+any frontend code.
+
+### No manual "approve" — capacity-driven, automatic
+
+There is no approve button anywhere in this UI, and none should ever be
+added: `RegistrationsService` resolves a new registration to `APPROVED` or
+`WAITLISTED` purely by capacity at registration time, and promotes the
+oldest `WAITLISTED` row automatically whenever an `APPROVED` registration
+is cancelled or rejected. The committee's only action on a registration is
+**reject** — everything else (approval, waitlist promotion) is a read-only
+consequence the UI displays, never a button it offers.
+
+### Answers are keyed by field id, not label — a live-verification catch
+
+`FormField.id` (present on any field read back from `GET
+.../registration-form`, absent on an editor draft that hasn't been saved
+yet) is the actual key `RegistrationsService.validateAnswers` reads answers
+by (`answers[field.id]`), confirmed by reading the backend source, but the
+first implementation of `buildAnswerSchema`/`RegisterDialog`/`formatAnswers`
+keyed everything by `field.label` instead — passing unit tests (which used
+matching fixtures) and TypeScript, but failing on every live submission
+with a custom form with `400 Missing required field: <label>` even though
+the field was filled in. Caught only by driving the real dialog against the
+real backend during Task 9, not by any earlier check. Fixed in
+`4f1fcc6`: `SavedFormField` (`FormField & { id: string }`) is now the type
+threaded through the register dialog and the answer schema builder; the
+committee-facing form-builder editor is unaffected, since full-replace PUT
+never sends or needs ids (`FormFieldDto` has none — the backend assigns
+fresh ids on every save, which is also why a re-saved form's ids don't
+match its own prior registrations' stored answers by design, not bug).
+`formatAnswers` looks up each answer's `field.id` for display purposes
+(label + sort order) and falls back to showing the raw key when no field
+matches — covers both "form since deleted" and "form since re-saved with
+new ids" without distinguishing the two.
+
+### Register dialog — dynamic schema, not a fixed form
+
+`buildAnswerSchema(fields: SavedFormField[])` builds a Zod object schema at
+runtime from whatever fields the event's form currently has, mirroring
+`validateAnswers` field-by-field: required TEXT/TEXTAREA/SELECT must be
+non-empty, SELECT must be one of its options, CHECKBOX is validated as a
+**boolean** (native checkbox inputs bound via `react-hook-form`'s
+`register()` yield `checked: boolean`, not a string) and converted to the
+backend's `'true'`/`'false'` string shape only at submit time, after
+validation. No shadcn `Select`/`Checkbox` component was added — the SELECT
+field uses a plain styled `<select>` and CHECKBOX a plain
+`<input type="checkbox">`, following the precedent the events list already
+set (`app/(app)/[orgSlug]/events/page.tsx`'s status filter) rather than
+pulling in a new dependency for one field type each.
+
+### Form builder — plain rows, no drag-and-drop dependency
+
+`RegistrationFormEditor` uses `useFieldArray` over a row-per-field editor
+(label, type, required, and a comma-separated options input shown only for
+SELECT) with move-up/move-down/remove buttons instead of a drag-and-drop
+library — same reasoning as the SELECT/CHECKBOX choice above. The whole
+editor renders read-only (fields as plain text, no Add/Save controls) when
+`!canEdit(event.status)`, matching the backend's own 409 guard
+(`Completed or cancelled events cannot have their form edited`) — avoids a
+round-trip just to learn the event is locked. Verified live: editing a
+COMPLETED event's form shows the read-only list, not an error.
+
+### Event detail page — tabs via local state, not a new shadcn Tabs
+
+Overview / Registration Form / Registrations render as a segmented button
+row + conditional content, the same lightweight pattern the events list
+already used for its Upcoming/Past toggle — no `npx shadcn add tabs`. Only
+committee sees the tab row at all; everyone else sees Overview's content
+directly, with `MyRegistrationPanel` (register button, or status badge +
+cancel) inserted beneath the existing description block for every role,
+including committee members themselves (self-registration isn't
+committee-exempt).
+
+### Registration status badges — a fourth semantic mapping
+
+`RegistrationStatusBadge`: `APPROVED→success`, `WAITLISTED→warning`,
+`REJECTED→danger`, `CANCELLED→neutral` — same semantic-token family as
+`EventStatusBadge`, same rule that the domain hue (blue,
+`--domain-registrations`) never appears on a status badge, verified visually
+in both themes.
+
+### Test baseline
+
+Frontend 54/54 (14 new: `buildAnswerSchema` per-field-type validation
+including the id-vs-label distinction, `registrationFormSchema` editor
+validation, `formatAnswers` id-to-label mapping and stale-key fallback) —
+same "logic only" bar as Slices 1–2. Page-level correctness verified live:
+form-builder round-trip (all four field types, persistence across reload),
+self-registration with validation errors, capacity-1 → WAITLISTED → reject
+→ auto-promotion → reject again (no further promotion, correct terminal
+state), status-filter click-through, COMPLETED-event read-only form and
+no-Register-button, both-theme screenshots. One real bug found and fixed
+during this pass (`4f1fcc6`, see above) — everything else passed on first
+drive. Backend baseline unchanged: 101 unit / 326 e2e (zero backend files
+touched this slice).
