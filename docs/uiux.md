@@ -311,3 +311,78 @@ no-Register-button, both-theme screenshots. One real bug found and fixed
 during this pass (`4f1fcc6`, see above) — everything else passed on first
 drive. Backend baseline unchanged: 101 unit / 326 e2e (zero backend files
 touched this slice).
+
+## Slice 4 — Members (shipped)
+
+Full CRUD against the live `MembershipsController`: list (search +
+server-side role/status filter), add member, detail (profile + committee
+history), edit profile/status, change role, remove. No new backend
+endpoints.
+
+### Two real type bugs fixed before any UI code
+
+`types/api.ts`'s `MembershipRole` carried a stray `'ALUMNI'` value and
+`MyMembership.status` carried a stray `'INACTIVE'` value — neither exists
+on the backend (`prisma`'s `Role` enum has 9 values, none of them ALUMNI;
+`MemberStatus` is `ACTIVE | ALUMNI` only). Both had been present since
+Slice 1 with nothing ever exercising the wrong branch, so they shipped
+silently until this slice's brainstorming cross-checked the type file
+against the Prisma schema directly. Fixed in the data-layer task before any
+page was written, rather than discovered live — the inverse of Slice 3's
+field-id bug, which *was* only caught live because its tests shared the
+same wrong assumption as the code.
+
+### Three-tier RBAC, not two
+
+Slices 2–3 only ever needed two tiers (`isCommittee`/`canManageMembers`).
+Members needed a third: `canManageRoles` (`PRESIDENT`/`VICE_PRESIDENT`
+only) gates role changes and removal, one tier stricter than
+`canManageMembers` (which gates add/edit-profile/status). A
+`MANAGE_MEMBERS`-tier actor (e.g. Secretary) sees Edit on every member's
+detail page but never Change role or Remove — verified live, not just
+inferred from the guard.
+
+### No single-member fetch endpoint
+
+`GET /organizations/:orgId/members` has no `:id` counterpart. The detail
+and edit pages both call `useMembers(orgId, {})` (unfiltered) and
+`.find(m => m.id === membershipId)` rather than a dedicated `useMember`
+hook — a foreign or removed id simply isn't in the list, which is also
+what renders `MemberNotFound`. No separate "does this exist" round-trip
+needed; the tenant-scoped list itself is the source of truth.
+
+### The last-active-president guardrail surfaces in three unrelated places
+
+Any write that would leave zero `ACTIVE` `PRESIDENT` memberships — status
+→ ALUMNI on the edit page, role change away from PRESIDENT in
+`ChangeRoleDialog`, or remove — gets the same backend `409 Organization
+must have at least one president`. The frontend doesn't try to predict
+this client-side (would require fetching the full list to count active
+presidents, and could drift from the backend's own serializable-
+transaction-guarded version); each of the three surfaces just displays
+`ApiError.message` verbatim inline and leaves the form/dialog open rather
+than redirecting. Verified live as the sole President against all three
+triggers in one pass.
+
+### Role badges are plain, status badges are semantic
+
+`MemberRoleBadge` uses `variant="outline"` with no color-coding — role
+isn't a success/failure signal the way event/registration/attendance
+status is. `MemberStatusBadge` follows the same semantic-token family as
+the other three status badges (ACTIVE=success, ALUMNI=neutral). Members
+has no assigned domain hue (`nav-items.ts` keeps Dashboard/Members/
+Settings neutral by design, unchanged this slice) — neither badge, nor
+anything else on these pages, ever renders in a domain color.
+
+### Test baseline
+
+Frontend 64/64 (10 new: `canManageRoles` truth table, add/edit-member
+schema validation including the "no role or email field in the edit
+shape" structural-safety check). Page-level correctness verified live: add
+→ list/filter/search → detail → change role with confirm → committee
+history recorded → edit profile/status → all three last-president
+guardrail surfaces → escalation-guard 403 as a MANAGE_MEMBERS-only actor
+→ tier-gated action visibility → remove → both themes. No bugs found
+during this pass (the two type fixes were caught earlier, during
+brainstorming, not live). Backend baseline unchanged: 101 unit / 326 e2e
+(zero backend files touched this slice).
