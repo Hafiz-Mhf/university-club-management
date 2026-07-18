@@ -48,8 +48,7 @@ export const registrationFormSchema = z.object({
           message: 'SELECT fields need at least one option',
           path: ['options'],
         }),
-    )
-    .default([]),
+    ),
 });
 
 export type RegistrationFormEditorInput = z.infer<typeof registrationFormSchema>;
