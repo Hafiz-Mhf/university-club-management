@@ -100,6 +100,39 @@ export interface Event {
   updatedAt: string;
 }
 
+export type RegistrationStatus = 'APPROVED' | 'WAITLISTED' | 'REJECTED' | 'CANCELLED';
+
+export interface Registration {
+  id: string;
+  eventId: string;
+  organizationId: string;
+  userId: string;
+  answers: Record<string, string | string[]> | null;
+  status: RegistrationStatus;
+  consentRecordId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type FormFieldType = 'TEXT' | 'TEXTAREA' | 'SELECT' | 'CHECKBOX';
+
+export interface FormField {
+  label: string;
+  type: FormFieldType;
+  required: boolean;
+  options?: string[];
+  order: number;
+}
+
+export interface RegistrationForm {
+  id: string;
+  eventId: string;
+  organizationId: string;
+  fields: FormField[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ConsentRecordItem {
   id: string;
   purpose: string;
