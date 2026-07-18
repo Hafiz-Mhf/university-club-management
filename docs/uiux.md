@@ -136,3 +136,75 @@ exists worth driving).
 `backend/src/main.ts` — `app.enableCors({ origin: process.env.FRONTEND_ORIGIN
 ?? 'http://localhost:3000' })`, locked to a single known origin. No other
 backend file touched.
+
+---
+
+## Slice 2 — Events (shipped)
+
+Replaces the Events placeholder with list/detail/create/edit + full
+lifecycle management, against the live `EventsController`. No backend
+changes this slice.
+
+### Role tiers — the MANAGE_EVENTS / MANAGE_MEMBERS split
+
+Slice 1's `isCommittee()` (`features/orgs/roles.ts`) covers the
+MANAGE_EVENTS tier (President, VP, Secretary, Treasurer, Event Director,
+Committee) — enough for create/edit/publish/complete. Cancel and delete are
+gated one tier stricter on the backend (MANAGE_MEMBERS, excludes COMMITTEE),
+matching the existing "create/edit vs destructive split" documented in
+`docs/security.md` for this exact module. Added `canManageMembers()`
+alongside `isCommittee()` — any UI gating a destructive event action must use
+the stricter check, not `isCommittee()`.
+
+### Status-driven UI, never disabled buttons for illegal transitions
+
+`features/events/status.ts` — five pure predicates
+(`canEdit`/`canPublish`/`canComplete`/`canCancel`/`canDelete`) mirroring
+`EventsService`'s transition table exactly. `LifecycleActions`
+(`components/events/lifecycle-actions.tsx`) renders only the buttons whose
+predicate *and* role check both pass — an illegal transition's button simply
+doesn't exist on the page, rather than existing in a disabled state. Cancel
+and delete open a `Dialog` confirm before mutating; publish/complete fire
+immediately (both reversible in spirit — publish can be followed by cancel,
+complete has no undo but isn't destructive in the same sense as delete).
+
+### Status badges use semantic tokens, not the domain hue
+
+`EventStatusBadge` maps `DRAFT→neutral`, `PUBLISHED→success`,
+`COMPLETED→info`, `CANCELLED→danger`. The Events *domain hue* (violet) stays
+reserved for navigation/icons per `design.md`'s restraint rule — status is a
+different signal than domain, and the two must never collide on the same
+page (verified visually in both themes during Task 5).
+
+### DRAFT-404 handling, not a filtered-empty list
+
+`GET /events/:id` 404s for a non-committee viewer requesting a DRAFT event
+(backend's deliberate no-existence-leak design). `useEvent()` sets
+`retry: false` (a 404 here is a meaningful answer, not a transient failure)
+and the detail page renders `EventNotFound` — a small, deliberately vague
+"Event not found. It may have been removed, or you don't have access to it."
+— on any `ApiError` with `status === 404`. Verified live: a participant
+hitting a DRAFT event's URL directly gets this page with zero data leak (not
+even the title reaches the client — the 404 has no body to leak).
+
+### List — client-side filtering, matches an established unpaginated-list precedent
+
+`GET /events` has no pagination or query params — full array, backend
+`orderBy: startAt desc`. The list page does search (substring on title),
+status filter, and an Upcoming/Past split entirely client-side via
+`useMemo`, the same reasoning already used for Asset Management's
+unpaginated list (`docs/security.md`): a per-org collection is bounded, and
+inventing a filter option that can never match anything (a "Draft" choice
+for a non-committee viewer, whose data never contains DRAFT rows) is
+confusing, not honest — so it's omitted for them entirely, not just
+disabled.
+
+### Test baseline
+
+Frontend 40/40 (12 new: role-tier truth table, status-transition truth
+table, form-schema date-range/capacity edge cases) — same "logic only, no
+component rendering" bar as Slice 1. Page-level correctness verified live
+(dev server + Playwright) instead: full create→publish→edit→complete→cancel
+→delete cycle, DRAFT-404 as a second account, both-theme screenshots. No new
+bugs found during that pass (Task 5 has no commit as a result — nothing to
+fix). Backend baseline unchanged: 101 unit / 326 e2e.
