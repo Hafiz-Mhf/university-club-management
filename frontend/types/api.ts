@@ -199,6 +199,20 @@ export interface FeedbackResponse {
   createdAt: string;
 }
 
+export type AssetCondition = 'GOOD' | 'DAMAGED' | 'LOST';
+
+export interface Asset {
+  id: string;
+  name: string;
+  quantity: number;
+  condition: AssetCondition;
+  location: string | null;
+  notes: string | null;
+  createdByUserId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type FileCategory = 'SOP' | 'REPORT' | 'FINANCIAL' | 'MEETING' | 'OTHER';
 
 export interface OrgFile {
