@@ -65,8 +65,15 @@ export function FileList({ orgId, canManage }: { orgId: string; canManage: boole
               </div>
               <div className="flex items-center gap-3">
                 <span className="text-xs text-foreground-subtle">
-                  {resolveUploaderName(f.uploadedByUserId, members.data ?? [])} ·{' '}
-                  {formatFileSize(f.fileSizeBytes)} · {relativeTime(f.createdAt)}
+                  {/* GET /members is VIEW_MEMBERS-gated (committee-only) but
+                      this list is visible to any org member — a 403 here is
+                      an expected authorization boundary, not a missing row,
+                      so it must not fall through to resolveUploaderName's
+                      raw-id fallback (that would leak an internal UUID). */}
+                  {members.isError
+                    ? 'Committee member'
+                    : resolveUploaderName(f.uploadedByUserId, members.data ?? [])}{' '}
+                  · {formatFileSize(f.fileSizeBytes)} · {relativeTime(f.createdAt)}
                 </span>
                 <Button
                   variant="secondary"
