@@ -7,7 +7,7 @@ function makeMember(overrides: Partial<Member> = {}): Member {
     id: 'm1',
     userId: 'u1',
     organizationId: 'o1',
-    role: 'MEMBER',
+    role: 'PARTICIPANT',
     status: 'ACTIVE',
     studentId: null,
     faculty: null,
