@@ -199,6 +199,28 @@ export interface FeedbackResponse {
   createdAt: string;
 }
 
+export interface AgendaItem {
+  topic: string;
+  notes: string;
+}
+
+export interface ActionItem {
+  task: string;
+  owner: string | null;
+}
+
+export interface MeetingMinutes {
+  id: string;
+  title: string;
+  meetingDate: string;
+  attendeeMembershipIds: string[];
+  agendaItems: AgendaItem[];
+  actionItems: ActionItem[];
+  createdByUserId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type AssetCondition = 'GOOD' | 'DAMAGED' | 'LOST';
 
 export interface Asset {
