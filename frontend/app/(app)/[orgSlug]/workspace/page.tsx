@@ -5,9 +5,12 @@ import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { FileList } from '@/components/files/file-list';
 import { UploadFileDialog } from '@/components/files/upload-file-dialog';
+import { AssetList } from '@/components/assets/asset-list';
+import { AssetDialog } from '@/components/assets/asset-dialog';
 import { useOrg } from '@/features/orgs/org-provider';
 import { isCommittee } from '@/features/orgs/roles';
 import { cn } from '@/lib/utils';
+import type { Asset } from '@/types/api';
 
 type Tab = 'files' | 'minutes' | 'assets';
 const TABS: { id: Tab; label: string }[] = [
@@ -16,10 +19,13 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'assets', label: 'Assets' },
 ];
 
+type AssetDialogState = { mode: 'create' } | { mode: 'edit'; asset: Asset } | null;
+
 export default function WorkspacePage() {
   const { org, membership } = useOrg();
   const [tab, setTab] = useState<Tab>('files');
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [assetDialog, setAssetDialog] = useState<AssetDialogState>(null);
   const committee = isCommittee(membership.role);
 
   return (
@@ -30,6 +36,12 @@ export default function WorkspacePage() {
           <Button size="sm" onClick={() => setUploadOpen(true)}>
             <Plus className="size-3.5" />
             Upload file
+          </Button>
+        )}
+        {tab === 'assets' && committee && (
+          <Button size="sm" onClick={() => setAssetDialog({ mode: 'create' })}>
+            <Plus className="size-3.5" />
+            Add asset
           </Button>
         )}
       </div>
@@ -55,12 +67,21 @@ export default function WorkspacePage() {
         </p>
       )}
       {tab === 'assets' && (
-        <p className="py-8 text-center text-sm text-foreground-muted">
-          Coming in a later sub-slice.
-        </p>
+        <AssetList
+          orgId={org.id}
+          canManage={committee}
+          onEdit={(asset) => setAssetDialog({ mode: 'edit', asset })}
+        />
       )}
 
       <UploadFileDialog orgId={org.id} open={uploadOpen} onOpenChange={setUploadOpen} />
+      {assetDialog && (
+        <AssetDialog
+          orgId={org.id}
+          asset={assetDialog.mode === 'edit' ? assetDialog.asset : undefined}
+          onClose={() => setAssetDialog(null)}
+        />
+      )}
     </main>
   );
 }
