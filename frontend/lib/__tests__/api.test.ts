@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
-import { api, ApiError, setOnAuthFailure, setOnConsentStale } from '@/lib/api';
+import { api, apiUpload, ApiError, setOnAuthFailure, setOnConsentStale } from '@/lib/api';
 import { useAuthStore } from '@/features/auth/auth-store';
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -177,5 +177,77 @@ describe('api client', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [, init] = fetchMock.mock.calls[0];
     expect((init.headers as Record<string, string>).Authorization).toBeUndefined();
+  });
+});
+
+describe('apiUpload', () => {
+  let fetchMock: Mock;
+
+  beforeEach(() => {
+    localStorage.clear();
+    useAuthStore.getState().clearSession();
+    fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    setOnAuthFailure(null);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('sends the FormData body as-is with no manually-set Content-Type header', async () => {
+    useAuthStore.getState().setSession({
+      accessToken: 'tok',
+      refreshToken: 'ref',
+      consentStale: false,
+    });
+    fetchMock.mockResolvedValueOnce(jsonResponse(201, { id: 'cert-1' }));
+    const formData = new FormData();
+    formData.set('userId', 'u1');
+
+    await apiUpload('/organizations/o1/events/e1/certificates', formData);
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toBe('http://localhost:3001/organizations/o1/events/e1/certificates');
+    expect(init.method).toBe('POST');
+    expect(init.body).toBe(formData);
+    expect((init.headers as Record<string, string>)['Content-Type']).toBeUndefined();
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer tok');
+  });
+
+  it('on 401: refreshes once, retries the original upload once', async () => {
+    useAuthStore.getState().setSession({
+      accessToken: 'stale',
+      refreshToken: 'ref-1',
+      consentStale: false,
+    });
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(401, { message: 'Unauthorized' }))
+      .mockResolvedValueOnce(
+        jsonResponse(201, { accessToken: 'fresh', refreshToken: 'ref-2', consentStale: false }),
+      )
+      .mockResolvedValueOnce(jsonResponse(201, { id: 'cert-1' }));
+
+    const result = await apiUpload<{ id: string }>('/path', new FormData());
+
+    expect(result).toEqual({ id: 'cert-1' });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    const retryCall = fetchMock.mock.calls[2];
+    expect((retryCall[1].headers as Record<string, string>).Authorization).toBe('Bearer fresh');
+  });
+
+  it('non-401 errors surface as ApiError', async () => {
+    useAuthStore.getState().setSession({
+      accessToken: 'tok',
+      refreshToken: 'ref',
+      consentStale: false,
+    });
+    fetchMock.mockResolvedValueOnce(jsonResponse(409, { message: 'A certificate already exists for this person and event' }));
+
+    const err = await apiUpload('/path', new FormData()).catch((e) => e);
+
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.status).toBe(409);
+    expect(err.message).toBe('A certificate already exists for this person and event');
   });
 });

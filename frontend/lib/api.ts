@@ -129,3 +129,45 @@ export async function api<T = unknown>(path: string, options: ApiOptions = {}): 
 
   return body as T;
 }
+
+async function uploadRequest(path: string, formData: FormData, retrying: boolean): Promise<Response> {
+  const headers: Record<string, string> = {};
+  const accessToken = useAuthStore.getState().accessToken;
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+
+  // No Content-Type set here — the browser derives the multipart boundary
+  // from the FormData body itself. Setting it manually would omit the
+  // boundary and break parsing server-side.
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method: 'POST',
+    headers,
+    body: formData,
+  });
+
+  if (res.status === 401 && !retrying) {
+    if (useAuthStore.getState().getRefreshToken()) {
+      const refreshed = await refreshSession();
+      if (refreshed) return uploadRequest(path, formData, true);
+      useAuthStore.getState().clearSession();
+      onAuthFailure?.();
+    }
+  }
+
+  return res;
+}
+
+export async function apiUpload<T = unknown>(path: string, formData: FormData): Promise<T> {
+  const res = await uploadRequest(path, formData, false);
+  const body = await parseBody(res);
+
+  if (!res.ok) {
+    const message = messageOf(body, res.statusText);
+    if (res.status === 403 && message === CONSENT_STALE_MESSAGE) {
+      useAuthStore.getState().setConsentStale(true);
+      onConsentStale?.();
+    }
+    throw new ApiError(res.status, message);
+  }
+
+  return body as T;
+}

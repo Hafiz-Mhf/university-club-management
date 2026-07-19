@@ -169,6 +169,23 @@ export interface MyAttendance extends Attendance {
   token: string;
 }
 
+export interface Certificate {
+  id: string;
+  eventId: string;
+  organizationId: string;
+  userId: string;
+  storageKey: string;
+  fileSizeBytes: number;
+  uploadedByUserId: string;
+  createdAt: string;
+}
+
+// GET .../certificates/me and GET .../certificates/:id/download only — a
+// freshly-signed, 5-minute download URL, never persisted client-side.
+export interface MyCertificate extends Certificate {
+  downloadUrl: string;
+}
+
 export interface Member {
   id: string;
   userId: string;
