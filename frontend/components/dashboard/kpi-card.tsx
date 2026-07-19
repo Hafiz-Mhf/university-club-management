@@ -5,13 +5,21 @@ import { cn } from '@/lib/utils';
 
 interface KpiCardProps {
   label: string;
-  value: number;
+  value: number | null;
   icon: LucideIcon;
   /** Domain-hue classes for the icon chip: [text color, tint background]. */
   hue: [string, string];
+  /** Defaults to formatCount (plain integer). Pass e.g. formatPercent for a ratio. */
+  format?: (value: number) => string;
 }
 
-export function KpiCard({ label, value, icon: Icon, hue: [textClass, bgClass] }: KpiCardProps) {
+export function KpiCard({
+  label,
+  value,
+  icon: Icon,
+  hue: [textClass, bgClass],
+  format = formatCount,
+}: KpiCardProps) {
   return (
     <Card className="shadow-card">
       <CardContent className="flex items-start justify-between gap-2">
@@ -20,7 +28,7 @@ export function KpiCard({ label, value, icon: Icon, hue: [textClass, bgClass] }:
             {label}
           </span>
           <span className="font-heading text-3xl font-semibold tabular-nums">
-            {formatCount(value)}
+            {value === null ? '—' : format(value)}
           </span>
         </div>
         <div className={cn('flex size-8 items-center justify-center rounded-md', bgClass)}>
