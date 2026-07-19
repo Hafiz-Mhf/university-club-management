@@ -36,3 +36,11 @@ export const MANAGE_ROLES_ROLES: MembershipRole[] = ['PRESIDENT', 'VICE_PRESIDEN
 export function canManageRoles(role: MembershipRole): boolean {
   return MANAGE_ROLES_ROLES.includes(role);
 }
+
+// Mirrors backend MANAGE_ATTENDANCE (MANAGE_EVENTS + VOLUNTEER) — the
+// first role group in this frontend that gives VOLUNTEER any capability.
+export const MANAGE_ATTENDANCE_ROLES: MembershipRole[] = [...COMMITTEE_ROLES, 'VOLUNTEER'];
+
+export function canManageAttendance(role: MembershipRole): boolean {
+  return MANAGE_ATTENDANCE_ROLES.includes(role);
+}

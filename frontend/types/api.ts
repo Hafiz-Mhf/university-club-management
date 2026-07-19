@@ -150,6 +150,25 @@ export interface ConsentRecordItem {
   grantedAt: string;
 }
 
+export type AttendanceStatus = 'REGISTERED' | 'PRESENT' | 'ABSENT';
+
+export interface Attendance {
+  id: string;
+  registrationId: string;
+  eventId: string;
+  organizationId: string;
+  status: AttendanceStatus;
+  scannedAt: string | null;
+  scannedBy: string | null;
+  createdAt: string;
+}
+
+// GET .../attendance/me only — a freshly-signed, non-expiring token, never
+// persisted server-side (no qrTokenHash column).
+export interface MyAttendance extends Attendance {
+  token: string;
+}
+
 export interface Member {
   id: string;
   userId: string;

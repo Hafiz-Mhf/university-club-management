@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canManageMembers, canManageRoles, isCommittee } from '@/features/orgs/roles';
+import { canManageAttendance, canManageMembers, canManageRoles, isCommittee } from '@/features/orgs/roles';
 import type { MembershipRole } from '@/types/api';
 
 const ALL: MembershipRole[] = [
@@ -26,6 +26,17 @@ describe('canManageMembers', () => {
       ADVISOR: false,
     };
     for (const role of ALL) expect(canManageMembers(role)).toBe(expected[role]);
+  });
+});
+
+describe('canManageAttendance', () => {
+  it('is true for MANAGE_EVENTS tier plus VOLUNTEER (the first tier this frontend gives VOLUNTEER any capability in)', () => {
+    const expected: Record<MembershipRole, boolean> = {
+      PRESIDENT: true, VICE_PRESIDENT: true, SECRETARY: true, TREASURER: true,
+      EVENT_DIRECTOR: true, COMMITTEE: true, VOLUNTEER: true, PARTICIPANT: false,
+      ADVISOR: false,
+    };
+    for (const role of ALL) expect(canManageAttendance(role)).toBe(expected[role]);
   });
 });
 
