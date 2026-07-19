@@ -10,6 +10,7 @@ import { EventStatusBadge } from '@/components/events/event-status-badge';
 import { LifecycleActions } from '@/components/events/lifecycle-actions';
 import { eventDateRange } from '@/components/events/event-card';
 import { MyCertificatePanel } from '@/components/certificates/my-certificate-panel';
+import { MyFeedbackPanel } from '@/components/feedback/my-feedback-panel';
 import { MyRegistrationPanel } from '@/components/registrations/my-registration-panel';
 import { RegistrationFormEditor } from '@/components/registrations/registration-form-editor';
 import { RegistrationsTable } from '@/components/registrations/registrations-table';
@@ -131,6 +132,8 @@ export default function EventDetailPage({
           <MyRegistrationPanel orgId={org.id} event={e} />
 
           <MyCertificatePanel orgId={org.id} eventId={e.id} />
+
+          <MyFeedbackPanel orgId={org.id} event={e} />
 
           <LifecycleActions event={e} orgId={org.id} orgSlug={org.slug} role={membership.role} />
         </>
