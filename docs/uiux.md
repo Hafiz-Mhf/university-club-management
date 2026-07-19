@@ -386,3 +386,94 @@ guardrail surfaces → escalation-guard 403 as a MANAGE_MEMBERS-only actor
 during this pass (the two type fixes were caught earlier, during
 brainstorming, not live). Backend baseline unchanged: 101 unit / 326 e2e
 (zero backend files touched this slice).
+
+## Slice 5 — Attendance / QR Check-in (shipped)
+
+Full attendance feature against the live `AttendanceController`: a
+participant's own QR check-in code, a committee/volunteer camera-based
+scanner with a manual-entry fallback, and a checked-in roster with
+mark-absent. No new backend endpoints — the full contract (`GET /me`,
+`GET /`, `POST /scan`, `POST /:id/absent`) was verified against the actual
+controller/service source during brainstorming, not assumed.
+
+### First frontend feature to give VOLUNTEER any capability
+
+Every prior role-tier (`isCommittee`, `canManageMembers`, `canManageRoles`)
+excluded `VOLUNTEER` entirely. `canManageAttendance` mirrors the backend's
+`MANAGE_ATTENDANCE` group exactly — `MANAGE_EVENTS` tier plus `VOLUNTEER` —
+so a volunteer with no other org-management access can still scan people in
+and mark them absent, matching the door-desk reality this feature serves.
+
+### Client-side name resolution, the same pattern as Slice 3's answer-formatting
+
+Neither `GET /attendance` nor `GET /registrations` joins a participant's
+name — `GET /attendance` returns only `registrationId`, not even `userId`
+directly. `resolveParticipantName(attendance, registrations, members)`
+chains `Attendance.registrationId` → matching `Registration.userId` →
+matching `Member.user.fullName`, client-side, over two already-fetched
+lists (`useRegistrations` from Slice 3, `useMembers` from Slice 4) rather
+than requesting a backend join. A missing registration or member (not
+possible under the lifecycle guarantees, but not ruled out under a race)
+falls back to the raw id instead of crashing or hiding the row — covered by
+its own unit tests (matched lookup, missing-registration fallback,
+missing-member fallback), independent of any component.
+
+### `BarcodeDetector`, feature-detected, with a manual fallback that exercises the identical contract
+
+`QrScanner` feature-detects `'BarcodeDetector' in window` (declared as a
+minimal ambient `Window` type locally — not yet in TypeScript's default DOM
+lib, and not worth pulling in a `@types` package for one interface). When
+supported, it requests `getUserMedia`, decodes frames in a
+`requestAnimationFrame` loop, and de-duplicates a still-in-frame value so
+holding a QR code in view doesn't resubmit it every frame. When unsupported
+(older Safari/Firefox) or camera access is denied, it falls back to a plain
+text-entry form calling the exact same `useScanAttendance` mutation — the
+door desk still functions without a camera, and this fallback path is what
+live verification actually drives, since headless Playwright can't grant
+camera permissions. Scan feedback (success/error) auto-clears after 2
+seconds so the scanner is immediately ready for the next person without a
+manual reset — a fast, repetitive flow, not a one-shot form.
+
+### First new runtime dependency this frontend has added
+
+`qrcode` (+`@types/qrcode` dev dependency) renders the participant's token
+as a QR image (`QRCode.toDataURL`) inside `MyQrDialog`, shown from a "Show
+my check-in code" button on `MyRegistrationPanel` (Slice 3) when the
+caller's registration is `APPROVED`. Camera scanning deliberately uses the
+browser-native `BarcodeDetector` API instead of a JS scanning library — the
+one new dependency this slice needed was for encoding, not decoding.
+
+### Route content branches on role; the nav item itself doesn't
+
+`/attendance`'s nav link stays visible to every member (mirrors `GET /me`
+being callable by anyone), but the page content branches on
+`canManageAttendance`: eligible viewers get an event picker into
+`/attendance/[eventId]` (scanner + roster); everyone else sees a short
+explainer pointing them to their own event page instead of a dead list —
+same role-branch-the-content-not-the-nav pattern the dashboard already
+established in Slice 1.
+
+### Status badges stay semantic, never the domain hue
+
+`AttendanceStatusBadge` follows the same semantic-token family as every
+other status badge in this app: REGISTERED=neutral, PRESENT=success,
+ABSENT=danger. Attendance's domain hue (teal, `--domain-attendance`) stays
+on the nav icon only, exactly as it already was — verified in both themes
+that it never leaks onto a badge.
+
+### Test baseline
+
+Frontend 68/68 (4 new: `canManageAttendance` truth table,
+`resolveParticipantName`'s three cases). Page-level correctness verified
+live against the real dev backend: participant registers → gets approved →
+opens "Show my check-in code" → QR image renders; committee account
+navigates the event picker → roster resolves real names (not raw ids);
+manual-entry fallback scans a fetched token → status flips to Present →
+"Mark absent" correctly disappears for that row; resubmitting the same
+token → 409 "already resolved" (confirmed at the network level); marking a
+second, unscanned registrant absent via the confirm dialog → status flips
+to Absent → action disappears; a plain PARTICIPANT account hitting
+`/attendance` directly → sees the explainer, not the picker; both themes
+screenshotted, badges read correctly, domain hue never appears on one. No
+bugs found during this pass. Backend baseline unchanged: 101 unit / 326
+e2e (zero backend files touched this slice).
