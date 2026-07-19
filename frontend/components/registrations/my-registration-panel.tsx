@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { MyQrDialog } from '@/components/attendance/my-qr-dialog';
 import { RegistrationStatusBadge } from '@/components/registrations/registration-status-badge';
 import { RegisterDialog } from '@/components/registrations/register-dialog';
 import { useCancelRegistration, useMyRegistration } from '@/features/registrations/use-registrations';
@@ -22,6 +23,7 @@ export function MyRegistrationPanel({ orgId, event }: { orgId: string; event: Ev
   const cancel = useCancelRegistration(orgId, event.id);
   const [registerOpen, setRegisterOpen] = useState(false);
   const [confirmingCancel, setConfirmingCancel] = useState(false);
+  const [qrOpen, setQrOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (myRegistration.isPending) return null;
@@ -60,6 +62,11 @@ export function MyRegistrationPanel({ orgId, event }: { orgId: string; event: Ev
             Cancel my registration
           </Button>
         )}
+        {registration.status === 'APPROVED' && (
+          <Button variant="secondary" size="sm" onClick={() => setQrOpen(true)}>
+            Show my check-in code
+          </Button>
+        )}
       </div>
 
       <Dialog open={confirmingCancel} onOpenChange={setConfirmingCancel}>
@@ -94,6 +101,8 @@ export function MyRegistrationPanel({ orgId, event }: { orgId: string; event: Ev
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <MyQrDialog orgId={orgId} eventId={event.id} open={qrOpen} onOpenChange={setQrOpen} />
     </div>
   );
 }
