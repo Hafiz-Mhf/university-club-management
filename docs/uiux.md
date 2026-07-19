@@ -563,3 +563,90 @@ e2e (326 baseline + 1 new regression case; one backend file
 (`certificates.service.ts`) and one backend test file touched this slice —
 the sole exception to the "zero backend files" pattern every prior slice
 held).
+
+## Slice 7 — Feedback (shipped)
+
+Full frontend surface for the backend's already-shipped Event Feedback +
+NPS feature (Phase 2): participant feedback submission (event-detail
+panel), committee aggregate summary (dedicated `/feedback` nav page +
+event picker, mirroring Certificates/Attendance), and the
+`requireFeedbackForCertificate` gate toggle added to the event create/edit
+form — the one piece of this feature that had a backend field
+(`UpdateEventDto.requireFeedbackForCertificate`) with no frontend control
+to set it, until now. Zero new backend endpoints — `POST .../feedback`,
+`GET .../feedback/me`, `GET .../feedback/summary` all pre-existed and were
+read directly from source during brainstorming.
+
+### Four-state panel, resolved as a pure function
+
+`resolveFeedbackPanelState(attendanceStatus, feedback, event, now)` in
+`features/feedback/panel-state.ts` returns one of `hidden | recap | form |
+window-closed`, gated first on `useMyAttendance` (Slice 5's hook — a
+`GET .../feedback/me` 404 alone can't distinguish "not a PRESENT attendee"
+from "PRESENT but hasn't submitted yet," so the attendance check has to
+run first). `window-closed` is a deliberate fourth state, not a silent
+hide: a PRESENT attendee who never submitted before the 14-day window
+closed sees a muted explanatory line rather than nothing, consistent with
+this app's "honest, not fake-empty" placeholder philosophy. The window
+math itself (`features/feedback/window.ts`) duplicates the backend's
+`FEEDBACK_WINDOW_MS` constant as a plain number — no shared package
+between frontend/backend anywhere in this codebase.
+
+### RatingScale — one component for both the 0-10 and 1-5 scales
+
+`components/feedback/rating-scale.tsx` is a parameterized button-row
+(`min`/`max`/`value`/`onChange`/`label`), used for all four scores (NPS:
+0-10; content/organization/venue: 1-5 each) rather than four bespoke
+widgets. Wired into the form via React Hook Form's `Controller` — this
+frontend's first use of `Controller`, since every prior form field bound
+through native `register()` on a real `<input>`/`<select>`/`<textarea>`,
+and a button-row isn't one.
+
+### Zod `.default()` splits a schema's input and output types
+
+`requireFeedbackForCertificate` on `eventFormSchema` uses
+`z.boolean().default(false)` so every existing call site/test that omits
+the field still parses successfully. This makes Zod's inferred input type
+(`z.input<typeof schema>`, field optional) diverge from its output type
+(`z.output<typeof schema>`, field always present) for the first time in
+this codebase — `EventForm`'s `useForm` grew from the one-generic
+`useForm<EventFormInput>` to the three-generic
+`useForm<EventFormValues, unknown, EventFormInput>` (raw form values →
+context → parsed output) to satisfy both the resolver (validates
+`EventFormValues`) and `onSubmit` (always receives `EventFormInput`, field
+never undefined).
+
+### Test baseline
+
+Frontend 97/97 (21 new: `isFeedbackWindowOpen`'s 3 boundary cases,
+`feedbackFormSchema`'s 6 validation cases, `resolveFeedbackPanelState`'s 6
+full-truth-table cases, `RatingScale`'s 4 rendering/interaction cases — a
+first for this codebase, since every prior slice's live-verification-only
+components had no direct test — plus 2 cases extending
+`eventFormSchema`'s existing test file for the new field). Adding
+`RatingScale`'s test also surfaced a latent gap in `vitest.setup.ts`: without
+vitest's `globals: true`, testing-library never auto-registers its
+`afterEach` unmount, so a test file rendering the same component multiple
+times accumulated DOM across `it()` blocks — fixed by adding an explicit
+`afterEach(cleanup)`, which every other test file benefits from
+retroactively even though none had hit the bug yet (single-render test
+files never noticed). Page-level correctness verified live against the
+real dev backend: a PRESENT attendee sees the form, submits NPS 9/Content
+5/Organization 4/Venue 5 + a comment, sees the exact values echoed back in
+a read-only recap immediately and again after a full reload; committee's
+`/feedback` → event picker → summary page shows the matching averages,
+response count, and comment; a non-attendee account sees no panel at all
+on the event page; a non-committee account sees the explainer at
+`/feedback`; the `requireFeedbackForCertificate` checkbox round-trips both
+directions (check→save→reload shows checked, uncheck→save→reload shows
+unchecked); both themes screenshotted, no domain-hue leakage. No bugs
+found in this slice's own surface. Backend untouched: 101 unit / 327 e2e
+(zero backend files touched).
+
+One pre-existing, unrelated bug was incidentally surfaced while switching
+test accounts: clicking the sidebar account menu throws a Base UI runtime
+error (`MenuGroupContext is missing`) from `components/ui/dropdown-menu.tsx`
+(`DropdownMenuLabel`) via `components/shell/user-menu.tsx` — reproducible
+with a genuine click, not a test artifact, but in Slice 1's shell code,
+untouched by this slice and unrelated to feedback. Flagged, not fixed here
+— left for a dedicated pass.
