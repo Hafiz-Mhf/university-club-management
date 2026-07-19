@@ -72,6 +72,19 @@ describe('Certificate delete (e2e)', () => {
       .set('Authorization', `Bearer ${token}`).expect(404);
   });
 
+  it('committee deletes a certificate that was already downloaded (CertificateDownload row exists)', async () => {
+    const { token, certId } = await presentParticipantWithCertificate();
+    // Exercise the owner's own /me endpoint first — this records a
+    // CertificateDownload row referencing the certificate.
+    await request(app.getHttpServer())
+      .get(`/organizations/${orgId}/events/${eventId}/certificates/me`)
+      .set('Authorization', `Bearer ${token}`).expect(200);
+
+    await request(app.getHttpServer())
+      .delete(`/organizations/${orgId}/events/${eventId}/certificates/${certId}`)
+      .set('Authorization', `Bearer ${presToken}`).expect(200);
+  });
+
   it('a plain participant cannot delete (403)', async () => {
     const { certId } = await presentParticipantWithCertificate();
     const { token: strangerToken } = await (async () => {

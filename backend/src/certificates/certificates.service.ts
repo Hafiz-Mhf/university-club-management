@@ -143,6 +143,13 @@ export class CertificatesService {
     // could leave a dangling DB row that blocks re-upload with no self-heal.
     try {
       await this.prisma.$transaction(async (tx) => {
+        // CertificateDownload.certificateId is a required FK with the
+        // default Restrict delete behavior — deleting a certificate that
+        // was ever downloaded (by anyone, including the owner's own /me
+        // call) would otherwise throw an uncaught P2003 here. The download
+        // history for a certificate that no longer exists isn't
+        // independently meaningful, so it's removed alongside it.
+        await tx.certificateDownload.deleteMany({ where: { certificateId } });
         await tx.certificate.delete({ where: { id: certificateId, organizationId } });
         await this.audit.record({
           organizationId, actorUserId, action: 'certificate.delete',
