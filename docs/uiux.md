@@ -830,3 +830,71 @@ found and fixed live (see above), both frontend-only. Backend untouched:
 Workspace Files tab — upload, category filter, download, remove, correct
 RBAC. Minutes and Assets tabs remain honest placeholders, next up as their
 own sub-slices.
+
+## Slice 10 — Workspace: Asset Management (shipped)
+
+Second of three Workspace sub-slices. Fills in the Assets tab of
+`/workspace` (previously a placeholder) against the already-shipped
+`AssetsController`: create, list, edit, remove — a plain inventory CRUD
+with no file storage involved, unlike Files. Meeting Minutes remains the
+third, unbuilt sub-slice. Zero new backend endpoints.
+
+### Modal dialogs, not dedicated pages — and a design that structurally avoids Slice 9's Cancel bug
+
+User picked modal dialogs over `/workspace/assets/new`-style dedicated
+pages, given the small field set (5 plain inputs, no role/RBAC selection
+like Members' add/edit) — proportionate to `UploadFileDialog`'s weight
+from Slice 9. `AssetDialog` handles both add and edit via one component
+and an optional `asset?` prop, but unlike `UploadFileDialog` it takes no
+`open` prop at all — the caller **conditionally mounts** it (only while a
+dialog should be showing) instead of keeping one instance alive across
+opens/closes. A fresh mount always reads its own `defaultValues`, so
+there's no manual reset path to get wrong — this was a deliberate
+structural choice at design time specifically to avoid re-introducing
+Slice 9's "Cancel button skipped `reset()`" bug class, and it worked:
+Task 7 verified typing into "Add asset," clicking Cancel, and reopening
+showed a genuinely blank form, no stale-state bug found.
+
+### Condition badge uses semantic status tokens, not a plain outline
+
+Unlike Slice 9's `FileCategoryBadge` (plain outline — file category is
+identity, not status), `AssetConditionBadge` uses the same semantic-token
+family as every other status badge in this app: `GOOD→success`,
+`DAMAGED→warning`, `LOST→danger`. Condition genuinely is a status signal
+(good/degraded/gone), so it gets color-coding the way file category
+deliberately doesn't.
+
+### A Slice 9 bug class caught at design time instead of live
+
+Slice 9's `FileList` leaked a raw uploader UUID to non-committee viewers
+because `GET /organizations/:orgId/members` is `VIEW_MEMBERS`-gated
+(committee-only) while the file list itself was visible to any member —
+`resolveUploaderName`'s "not found" fallback fired on every 403 instead of
+only the genuine rare case. `AssetList`'s "added by" resolution hits the
+exact same shape of risk (`Asset.createdByUserId` resolved via the same
+`useMembers` call, same asset list visible to any member), so the spec and
+plan built in the fix from the start:
+`members.isError ? 'Committee member' : resolveMemberName(...)`, comment
+explaining why, before any code was written. Live verification (Task 7)
+confirmed a non-committee test account correctly saw "Committee member,"
+not a raw id — this is the one specific regression the plan flagged in
+advance as worth checking, and it held.
+
+### Test baseline
+
+Frontend 117/117 (6 new: `assetFormSchema`'s validation cases — required
+name, positive-integer quantity, enum-restricted condition, optional
+location/notes). Live verification: added one asset per condition value
+(GOOD/DAMAGED/LOST), confirmed each badge color; edited an asset's
+quantity and condition, confirmed the row and badge updated; removed an
+asset with confirm; the Cancel-then-reopen check described above found no
+stale state; a non-committee account saw the list with no Add/Edit/Remove
+controls and "Committee member" instead of a raw id; both themes
+screenshotted clean (green/amber/red badges, no domain-hue leakage).
+Zero bugs found — no fix commit this task. Backend untouched: 101 unit /
+327 e2e (Slice 9's baseline, unchanged).
+
+**What's real after Slice 10:** everything from Slices 1–9, plus the
+Workspace Assets tab — add/edit via modal, condition tracking with
+semantic-colored badges, remove, correct RBAC. Meeting Minutes remains the
+last Workspace sub-slice.

@@ -823,25 +823,72 @@ Backend untouched: 101 unit / 327 e2e (Slice 8's baseline, unchanged).
 Workspace Files tab (upload, category filter, download, remove, correct
 RBAC). Minutes and Assets remain the next two Workspace sub-slices.
 
+### Frontend Slice 10 — Workspace: Asset Management (shipped, `feature/frontend-slice10-workspace-assets`)
+
+Spec: `docs/superpowers/specs/2026-07-19-frontend-slice10-workspace-assets-design.md`.
+Plan: `docs/superpowers/plans/2026-07-19-frontend-slice10-workspace-assets.md`.
+Full architecture as built: `docs/uiux.md` (Slice 10 section).
+
+**Scope:** second of three Workspace sub-slices — full frontend surface
+for the already-shipped `AssetsController` (create/list/edit/remove), a
+plain inventory CRUD with no file storage. User picked modal dialogs over
+dedicated pages for add/edit, proportionate to the 5-field form. No new
+backend endpoints.
+
+6 code tasks, one commit each: data layer (`5469761`), form schema
+(`021d4b4`), `AssetConditionBadge` (`e801f93`), `AssetDialog` (`5cb8b84`),
+`AssetList` (`0132d70`), page wiring (`4731c1a`); Task 7 (live
+verification) found **zero** bugs — a first since Slice 5, and the first
+time in this project a slice's design phase pre-empted the exact bug
+class its predecessor hit live.
+
+**Design choice that structurally avoided a repeat of Slice 9's bug:**
+`AssetDialog` takes no `open` prop — the caller conditionally *mounts* it
+only while in use, rather than keeping one instance alive with manual
+reset logic (which is what broke in Slice 9's `UploadFileDialog` Cancel
+button). A fresh mount always starts from its own `defaultValues`, so
+there's no reset path to get wrong. Verified live: type into "Add asset,"
+Cancel, reopen — genuinely blank, no stale state.
+
+**A second Slice 9 bug class caught at design time, not live:** Slice 9's
+`FileList` leaked a raw uploader UUID to non-committee viewers because
+`GET /members` is `VIEW_MEMBERS`-gated (committee-only) while the file
+list itself was visible to any member. `AssetList`'s "added by" resolution
+hits the identical shape of risk (`createdByUserId` resolved the same way,
+same any-member-visible list) — the spec and plan built in
+`members.isError ? 'Committee member' : resolveMemberName(...)` from the
+start. Live verification confirmed a participant account saw "Committee
+member," not a raw id.
+
+**Test baseline:** frontend 117/117 (6 new — `assetFormSchema`'s
+validation cases). Live verification: one asset added per condition value
+(GOOD/DAMAGED/LOST) with the badge colors confirmed (green/amber/red),
+edit round-trip (quantity + condition), remove with confirm, non-committee
+account correctly gated, both themes screenshotted clean. Backend
+untouched: 101 unit / 327 e2e (Slice 9's baseline, unchanged).
+
+**What's real after Slice 10:** everything from Slices 1–9, plus the
+Workspace Assets tab — add/edit via modal, condition tracking with
+semantic-colored badges, remove, correct RBAC. Meeting Minutes remains the
+last Workspace sub-slice.
+
 ---
 
 ## Next step
 
-Frontend Slice 9 (Workspace — File Repository) merged to `main` —
+Frontend Slice 10 (Workspace — Asset Management) merged to `main` —
 docs-synced, tests green, branch deleted (see finish-branch below for
 confirmation this actually happened by the time you're reading this).
 
-**No frontend slice 10 has been picked yet.** Remaining Workspace
-sub-slices (Meeting Minutes, Asset Management) and Settings are the only
-unscoped work left. Ask/confirm before starting the next brainstorm —
-likely continuing the Workspace split (Minutes or Assets next) unless the
-user wants to jump to Settings instead.
+**No frontend slice 11 has been picked yet.** Meeting Minutes (the last
+Workspace sub-slice) and Settings are the only unscoped work left.
+Ask/confirm before starting the next brainstorm.
 
 Backend Phase 2 remains fully shipped (11/11 items, see above); Phase 3
 backend items are still unscoped and untouched — the user's focus remains on
 the frontend. Slice 6 remains the only frontend slice to have touched a
 backend file (one real bug fix, `certificates.service.ts` + its e2e test);
-Slices 7, 8, and 9 all held "zero backend files."
+Slices 7, 8, 9, and 10 all held "zero backend files."
 
 Standing preferences remain in force for whatever comes next: pause before
 Task 1, pause before the live-verification task too (added as a standing
@@ -851,7 +898,7 @@ writing plan task-numbering (frontend `npm test`/`npm run build` alongside
 backend `npm test`/`npm run test:e2e`). Live-driving the actual flow (dev
 server + Playwright) as the real verification step for page-level
 correctness, rather than component unit tests, remains essential — it
-caught nothing in Slices 1, 2, 4, and 5, one bug each in Slices 3 and 8
+caught nothing in Slices 1, 2, 4, 5, and 10, one bug each in Slices 3 and 8
 (field-id-vs-label mismatch; invisible sparse-line dots), one
 *unrelated*-but-flagged bug in Slice 7 (account-menu crash, fixed
 separately), **two** in Slice 6 (one frontend, one backend), and **two**
@@ -866,14 +913,15 @@ catch different failure classes. Slice 8 adds one more: a "looks broken"
 observation during live verification (empty-looking bar charts) can be a
 screenshot-compression artifact, not a real bug — confirm via DOM/computed-
 style inspection before treating a visual impression as a defect. Slice 9
-adds a distinct pattern worth carrying forward to any future feature that
-resolves names/labels by joining against another endpoint's data: check
-whether that *other* endpoint's RBAC tier is actually a subset of the
-*current* feature's visibility — if the current feature is visible to a
-wider audience than the endpoint it depends on for display data, every
-viewer outside that narrower tier will silently hit the "not found"
-fallback path instead of a permission error, which can leak internal ids
-if that fallback isn't designed for an authorization failure specifically.
+established a pattern that Slice 10 then *proved out in practice*: when a
+future feature resolves names/labels by joining against another endpoint's
+data, check whether that other endpoint's RBAC tier is a subset of the
+current feature's visibility — and if a slice's own predecessor hit a bug
+class (stale dialog state, an authorization-vs-not-found conflation), check
+whether the *new* slice's design has the same shape of risk *before*
+writing code, not just during live verification. Slice 10 is the first
+case in this project where that design-time check actually paid off —
+zero bugs found live, both risks addressed on paper first.
 
 This doc itself (`docs/current-context.md`) is untracked (`git status` shows
 it as `??`) — it has never been committed. Keep updating it in place; whether
