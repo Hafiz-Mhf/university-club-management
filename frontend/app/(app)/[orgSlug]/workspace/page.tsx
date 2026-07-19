@@ -7,6 +7,7 @@ import { FileList } from '@/components/files/file-list';
 import { UploadFileDialog } from '@/components/files/upload-file-dialog';
 import { AssetList } from '@/components/assets/asset-list';
 import { AssetDialog } from '@/components/assets/asset-dialog';
+import { MinutesList } from '@/components/minutes/minutes-list';
 import { useOrg } from '@/features/orgs/org-provider';
 import { isCommittee } from '@/features/orgs/roles';
 import { cn } from '@/lib/utils';
@@ -62,9 +63,7 @@ export default function WorkspacePage() {
 
       {tab === 'files' && <FileList orgId={org.id} canManage={committee} />}
       {tab === 'minutes' && (
-        <p className="py-8 text-center text-sm text-foreground-muted">
-          Coming in a later sub-slice.
-        </p>
+        <MinutesList orgId={org.id} orgSlug={org.slug} canManage={committee} />
       )}
       {tab === 'assets' && (
         <AssetList
