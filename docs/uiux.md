@@ -650,3 +650,107 @@ error (`MenuGroupContext is missing`) from `components/ui/dropdown-menu.tsx`
 with a genuine click, not a test artifact, but in Slice 1's shell code,
 untouched by this slice and unrelated to feedback. Flagged, not fixed here
 — left for a dedicated pass.
+
+## Slice 8 — Analytics (shipped)
+
+Full dashboard for the backend's 7 already-shipped, read-only analytics
+endpoints (overview, certificates, trends, demographics, committee-activity,
+feedback, feedback-trends) — a KPI row, five chart/table sections, and a
+7/30/90-day range control. This frontend's first chart library and first
+use of the `dataviz` skill. Zero new backend endpoints.
+
+### First chart library — shadcn's Recharts wrapper, not a bespoke one
+
+`npx shadcn@latest add chart` installed `recharts@3.8.0` +
+`components/ui/chart.tsx` (`ChartContainer`/`ChartTooltip`/
+`ChartTooltipContent`/`ChartLegend`/`ChartLegendContent`, `ChartConfig`
+type) — this generation's standard chart primitive, consumed as-is rather
+than hand-rolling SVG. `HorizontalBarChart`, `SingleSeriesLineChart`, and
+`RatingsTrendChart` (`components/analytics/`) are the only three chart
+shapes this slice needed; a fourth generalization (single→N-series line
+chart) was deliberately not built since `RatingsTrendChart`'s 3 fixed
+series (content/organization/venue) is the only multi-series case in this
+dashboard (YAGNI, noted inline in the component).
+
+### Chart colors are a new token trio, separate from the existing domain hues
+
+`design.md`'s seven domain hues are icons/tags only, never chart fills —
+reusing them as Recharts series colors would make a legend swatch
+indistinguishable from a nav icon's meaning. Per the `dataviz` skill's
+color-formula step, three new literal hex values were added to `:root` in
+`app/globals.css` — `--chart-1: #3f9142` (green), `--chart-2: #2f7de1`
+(blue), `--chart-3: #b8860b` (gold) — chosen to echo the Analytics/
+Registrations/Certificates domain hues' *identity* without being the same
+CSS variables, then validated with `dataviz`'s `validate_palette.js`
+against both the light surface (`#fafaf8`) and dark surface (`#18171b`).
+The same three hex values pass validation unmodified in both modes, so
+they're pinned once in `:root` with **no dark-mode override** — the
+existing domain tokens' own dark variants were tested too and failed the
+dark lightness band for chart use specifically, confirming the two token
+sets need to diverge, not share values.
+
+### A real bug: `dot={false}` hides a truthful data point, not just a stylistic no-op
+
+Recharts renders an isolated non-null value surrounded by `null` neighbors
+(under `connectNulls={false}`) as a zero-length path segment — with
+`dot={false}`, that point is **not drawn at all**, even though the data is
+real (e.g. the one day in a 30-day window with actual feedback
+submissions). Confirmed via `.recharts-line-curve` path inspection: the
+affected lines rendered a single-point degenerate path
+(`"M427,58.5Z"`) while lines with no null gaps (Registration Trend, Member
+Growth) rendered full multi-point paths normally. Fixed (`77bbd27`) by
+giving every `<Line>` in `single-series-line-chart.tsx` and
+`ratings-trend-chart.tsx` an explicit dot spec —
+`{ r: 4, strokeWidth: 2, stroke: 'var(--background)', fill: 'var(--color-*)' }`
+— matching `dataviz`'s own mark spec (≥8px/r≥4 markers, a surface-color
+ring for overlap legibility) rather than leaving dots off by default. Noted
+but not fixed further: two series landing on the exact same value on the
+same day render as one visually-overlapping dot — the ring solves
+"crossing a line" legibility, not "identical coordinates," and the
+tooltip/legend/table already disclose both values correctly.
+
+### KPI cards learn to render "no data yet," not a fake zero
+
+`KpiCard`'s `value` prop widened from `number` to `number | null` (a
+brand-new org can have a null `attendanceRate` — no events yet — and `0%`
+would misleadingly imply "zero attendance" rather than "no data"), with a
+new optional `format?: (value: number) => string` prop (defaults to the
+existing `formatCount`) so the same component now also renders
+`formatPercent` output for the attendance-rate tile without a parallel
+component.
+
+### Client-side event-title resolution, the same pattern as Slices 3/5/6's name resolution
+
+The feedback-summary and per-event feedback rows carry `eventId`, not a
+title — `resolveEventTitle(eventId, events)` joins against the
+already-fetched events list client-side, falling back to the raw id on a
+miss, mirroring `resolveParticipantName`/`resolveMemberName` exactly rather
+than inventing a new lookup shape.
+
+### Date-range control scopes only the day-windowed sections
+
+The 7d/30d/90d control re-fetches Registration Trend, Member Growth,
+Committee Activity, NPS Trend, and Ratings Trend (all backed by `days`-
+parameterized endpoints); the KPI row, Demographics, and the Feedback table
+are snapshot/all-time data and don't re-fetch on range change — verified
+live via the trend charts' x-axis labels changing (`2026-06-23…2026-07-19`
+→ `2026-07-13…2026-07-19`) while the KPI row stayed fixed.
+
+### Test baseline
+
+Frontend 106/106 (9 new: `formatPercent`'s 3 cases, `toBarData`/
+`committeeActivityToBarData`'s 3 cases, `resolveEventTitle`'s 2 cases).
+Page-level correctness verified live against the real dev backend: full
+dashboard render with real KPI/trend/demographic/committee/feedback data;
+date-range control confirmed scoping only the windowed sections; a
+non-committee account sees the "Analytics are for committee..." explainer
+instead of the dashboard (12 expected console 403s — all 6 analytics hooks
+fire before the eligibility check gates the render, the same pattern every
+other role-gated page in this app already has); both themes screenshotted,
+chart colors read clearly with no domain-hue leakage onto non-chart
+elements. One real bug found and fixed (`77bbd27`, sparse-line dot
+visibility, see above); one initial false alarm (bar charts looked empty
+in a full-page screenshot — confirmed via `browser_evaluate` that the SVG
+paths and computed fill colors were correct all along, the screenshot was
+just too compressed to show 20px-tall bars clearly). Backend untouched:
+101 unit / 327 e2e (Slice 7's baseline, unchanged).
