@@ -477,3 +477,89 @@ to Absent → action disappears; a plain PARTICIPANT account hitting
 screenshotted, badges read correctly, domain hue never appears on one. No
 bugs found during this pass. Backend baseline unchanged: 101 unit / 326
 e2e (zero backend files touched this slice).
+
+## Slice 6 — Certificates (shipped)
+
+Full certificates feature against the live `CertificatesController`: a
+participant's own certificate download (shown from the event they
+attended), committee per-event certificate management (list, manual
+upload, remove). Generation itself is fully automatic — this slice only
+builds the viewing/managing surface, adding zero new backend endpoints and
+no UI to trigger generation.
+
+### First multipart upload this frontend has needed
+
+Every prior feature's mutations were plain JSON bodies. `lib/api.ts` grew
+an `apiUpload<T>(path, formData)` sibling function rather than widening
+`api()` itself — it reuses the same bearer-token injection and
+401→refresh→retry cycle, but passes a `FormData` body with no manually-set
+`Content-Type` header (the browser derives the multipart boundary from the
+`FormData` itself; setting the header manually would omit it and break
+server-side parsing). `api()` was left untouched — zero risk to any
+existing JSON call site.
+
+### No new role tier — first frontend feature without one since Slice 3
+
+Unlike Attendance's VOLUNTEER-inclusive `MANAGE_ATTENDANCE_ROLES`,
+`CertificatesController` gates every committee-only route with the
+backend's plain `MANAGE_EVENTS` group, so this slice reuses `isCommittee`
+from Slice 2 directly — no new truth table needed.
+
+### One-hop name resolution, reusing Slice 5's two-hop resolver for the other list
+
+`Certificate` carries `userId` directly (unlike `Attendance`, which only
+carries `registrationId`), so the committee list's name resolution is a
+new, simpler one-hop function: `resolveMemberName(userId, members)`. The
+upload form's attendee picker, however, is built from `Attendance[]` (only
+`PRESENT` rows, filtered further to exclude anyone already certified), so
+it reuses Slice 5's existing two-hop `resolveParticipantName` as-is rather
+than introducing a second name-from-attendance function.
+
+### Client-side file validation is UX only, never the security boundary
+
+`validateCertificateFile(file)` mirrors the backend's own
+`ALLOWED_MIME`/`MAX_FILE_BYTES` (PDF, 5MB) as a fast-fail check before the
+network round-trip. The backend re-validates both regardless — the client
+check exists purely so a bad file gets an inline message instead of a
+round-trip 400.
+
+### A real backend bug, found only by live-driving the full lifecycle
+
+Live verification is deliberately not backend-out-of-scope when a real
+defect blocks the frontend flow it's driving. Removing a certificate that
+had ever been downloaded — including by its own owner's `GET /me` call,
+which every participant's own certificate view triggers — 500'd:
+`CertificateDownload.certificateId` is a required foreign key with
+Prisma's default `Restrict` delete behavior, and the existing
+`certificates-delete.e2e-spec.ts` never called `GET /me` before deleting,
+so the path was never exercised. Fixed in
+`certificates.service.ts#remove()` by clearing the certificate's
+`CertificateDownload` rows inside the same transaction before the delete
+(download history for a certificate that no longer exists isn't
+independently meaningful), plus a new e2e case
+("committee deletes a certificate that was already downloaded") added to
+lock in the fix. This is the one exception to "backend untouched" the
+plan's global constraints stated up front — a real bug surfacing mid-slice
+overrides a scoping assumption written before the bug was known, same as
+Slice 3's precedent (though that one was a frontend-only fix).
+
+### Test baseline
+
+Frontend 76/76 (5 new: `apiUpload`'s three behavioral cases —
+FormData-with-no-Content-Type, 401 refresh-and-retry, non-401 error
+surfacing — `resolveMemberName`'s two cases, `validateCertificateFile`'s
+three cases). Page-level correctness verified live against the real dev
+backend: complete a `requireFeedbackForCertificate: false` event with two
+`PRESENT` attendees → both certificates auto-generate immediately;
+participant's "Download certificate" link resolves to a real signed URL;
+committee list resolves real names with correct file size/date; remove →
+hit the 500 bug → fixed → remove works cleanly; re-upload through the
+form → reappears in the list; eligible-attendee filtering correctly
+excludes certified people and includes uncertified ones in both
+directions; a plain PARTICIPANT account hitting `/certificates` directly
+sees the explainer, not the picker; both themes screenshotted, no
+domain-hue leakage onto anything but the nav icon. Backend: 101 unit / 327
+e2e (326 baseline + 1 new regression case; one backend file
+(`certificates.service.ts`) and one backend test file touched this slice —
+the sole exception to the "zero backend files" pattern every prior slice
+held).
