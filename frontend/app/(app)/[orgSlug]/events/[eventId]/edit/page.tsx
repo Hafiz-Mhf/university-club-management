@@ -70,6 +70,7 @@ export default function EditEventPage({
           startAt: isoToLocalInput(e.startAt),
           endAt: isoToLocalInput(e.endAt),
           capacity: e.capacity === null ? '' : String(e.capacity),
+          requireFeedbackForCertificate: e.requireFeedbackForCertificate,
         }}
         onSubmit={(values) =>
           update.mutate(values, {

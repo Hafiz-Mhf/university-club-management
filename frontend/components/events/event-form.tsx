@@ -7,12 +7,16 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { eventFormSchema, type EventFormInput } from '@/features/events/schemas';
+import {
+  eventFormSchema,
+  type EventFormInput,
+  type EventFormValues,
+} from '@/features/events/schemas';
 import { ApiError } from '@/lib/api';
 
 interface EventFormProps {
   mode: 'create' | 'edit';
-  defaultValues?: Partial<EventFormInput>;
+  defaultValues?: Partial<EventFormValues>;
   onSubmit: (values: EventFormInput) => void;
   isPending: boolean;
   error: unknown;
@@ -39,7 +43,7 @@ function Field({
 }
 
 export function EventForm({ mode, defaultValues, onSubmit, isPending, error }: EventFormProps) {
-  const form = useForm<EventFormInput>({
+  const form = useForm<EventFormValues, unknown, EventFormInput>({
     resolver: zodResolver(eventFormSchema),
     defaultValues: {
       title: '',
@@ -48,6 +52,7 @@ export function EventForm({ mode, defaultValues, onSubmit, isPending, error }: E
       startAt: '',
       endAt: '',
       capacity: '',
+      requireFeedbackForCertificate: false,
       ...defaultValues,
     },
   });
@@ -105,6 +110,16 @@ export function EventForm({ mode, defaultValues, onSubmit, isPending, error }: E
           {...form.register('capacity')}
         />
       </Field>
+      <div className="flex items-center gap-2">
+        <input
+          id="requireFeedbackForCertificate"
+          type="checkbox"
+          {...form.register('requireFeedbackForCertificate')}
+        />
+        <Label htmlFor="requireFeedbackForCertificate" className="font-normal">
+          Require feedback before releasing certificates
+        </Label>
+      </div>
       <div>
         <Button type="submit" disabled={isPending}>
           {isPending && <Loader2 className="size-4 animate-spin" />}

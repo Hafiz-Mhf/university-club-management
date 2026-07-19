@@ -30,3 +30,15 @@ it('treats blank capacity as unlimited, accepts a positive integer, rejects zero
   expect(eventFormSchema.safeParse({ ...base, capacity: '50' }).success).toBe(true);
   expect(eventFormSchema.safeParse({ ...base, capacity: '0' }).success).toBe(false);
 });
+
+it('defaults requireFeedbackForCertificate to false when omitted', () => {
+  const r = eventFormSchema.safeParse(base);
+  expect(r.success).toBe(true);
+  if (r.success) expect(r.data.requireFeedbackForCertificate).toBe(false);
+});
+
+it('accepts an explicit true', () => {
+  const r = eventFormSchema.safeParse({ ...base, requireFeedbackForCertificate: true });
+  expect(r.success).toBe(true);
+  if (r.success) expect(r.data.requireFeedbackForCertificate).toBe(true);
+});

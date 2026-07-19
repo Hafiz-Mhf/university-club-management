@@ -13,6 +13,7 @@ function toBody(input: EventFormInput) {
     startAt: new Date(input.startAt).toISOString(),
     endAt: new Date(input.endAt).toISOString(),
     capacity: input.capacity ? Number(input.capacity) : undefined,
+    requireFeedbackForCertificate: input.requireFeedbackForCertificate,
   };
 }
 

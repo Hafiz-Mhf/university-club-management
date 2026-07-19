@@ -10,6 +10,7 @@ export const eventFormSchema = z
     startAt: z.string().min(1, 'Start date/time is required'),
     endAt: z.string().min(1, 'End date/time is required'),
     capacity: z.string().optional(),
+    requireFeedbackForCertificate: z.boolean().default(false),
   })
   .refine((v) => new Date(v.endAt) > new Date(v.startAt), {
     message: 'End must be after start',
@@ -20,4 +21,8 @@ export const eventFormSchema = z
     path: ['capacity'],
   });
 
-export type EventFormInput = z.infer<typeof eventFormSchema>;
+// Zod's .default() splits the schema's input/output types: raw form values
+// may omit requireFeedbackForCertificate (input), parsed values never do
+// (output). RHF needs both — useForm<EventFormValues, unknown, EventFormInput>.
+export type EventFormValues = z.input<typeof eventFormSchema>;
+export type EventFormInput = z.output<typeof eventFormSchema>;
