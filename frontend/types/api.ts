@@ -199,6 +199,19 @@ export interface FeedbackResponse {
   createdAt: string;
 }
 
+export type FileCategory = 'SOP' | 'REPORT' | 'FINANCIAL' | 'MEETING' | 'OTHER';
+
+export interface OrgFile {
+  id: string;
+  title: string;
+  category: FileCategory;
+  originalFilename: string;
+  mimeType: string;
+  fileSizeBytes: number;
+  uploadedByUserId: string;
+  createdAt: string;
+}
+
 export interface Member {
   id: string;
   userId: string;
