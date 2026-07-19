@@ -764,24 +764,84 @@ Analytics dashboard — KPIs, registration/member-growth trends,
 faculty/programme demographics, committee activity ranking, NPS/ratings
 trends, per-event feedback table.
 
-**Placeholder routes remaining:** Workspace, Settings.
+**Placeholder routes remaining:** Settings. (Workspace is now a real
+tabbed page — Files tab shipped in Slice 9, Minutes/Assets tabs remain
+honest placeholders, next up as their own sub-slices.)
+
+### Frontend Slice 9 — Workspace: File Repository (shipped, `feature/frontend-slice9-workspace-files`)
+
+Spec: `docs/superpowers/specs/2026-07-19-frontend-slice9-workspace-files-design.md`.
+Plan: `docs/superpowers/plans/2026-07-19-frontend-slice9-workspace-files.md`.
+Full architecture as built: `docs/uiux.md` (Slice 9 section).
+
+**Scoping decision:** "Workspace" bundles three independent backend
+subsystems (File Repository, Meeting Minutes, Asset Management) behind one
+nav placeholder — combined, easily 15+ tasks, same shape of problem as
+Events+Registrations in Slice 2, split the same way. User picked File
+Repository first (of the three) as the simplest mental model, reusing
+Slice 6's `apiUpload` multipart pattern directly. `/workspace` becomes a
+real tabbed page (Files / Minutes / Assets, local-state tabs mirroring
+Slice 3's event-detail pattern) — this sub-slice builds the Files tab
+fully, Minutes/Assets stay as honest "coming in a later sub-slice" text.
+
+7 code tasks, one commit each: data layer (`77a91ec`), uploader-name
+resolution (`7326f15`), upload validation (`98329d4`), `FileCategoryBadge`
+(`c71a837`, folded in a test-fixture fix caught by `tsc` — an invalid
+`'MEMBER'` role value vitest doesn't typecheck but the build does),
+`UploadFileDialog` (`92d73a8`), `FileList` (`7a9745e`), page wiring
+(`d980796`); Task 8 (live verification) found and fixed **two** real bugs
+(`d12c7bd`, `cb0352e`) — both frontend-only, both discovered by actually
+driving the flow rather than any static check.
+
+**Bug 1:** `UploadFileDialog`'s Cancel button called the raw
+`onOpenChange(false)` prop directly instead of the Dialog's own wrapped
+handler that calls `reset()` first — so a failed/partial attempt's
+title/category/error state leaked into the next time the dialog opened.
+Fixed by routing Cancel through the same reset-then-close path every other
+close route already used.
+
+**Bug 2:** a genuine security-adjacent UX leak — `GET
+/organizations/:orgId/files` is open to any org member, but the uploader
+name resolution depends on `GET /organizations/:orgId/members`, which is
+`VIEW_MEMBERS`-gated (committee-only). For a plain participant that query
+403s, and `resolveUploaderName`'s "member not found" fallback — meant for
+a rare deleted-row edge case — fired on every row instead, showing raw
+internal user ids to any non-committee viewer. Found by switching to a
+participant test account. Fixed at the `FileList` call site: render
+"Committee member" when the members query errors, rather than falling
+through to the raw-id fallback.
+
+**Test baseline:** frontend 111/111 (5 new — `resolveUploaderName`'s 2
+cases, `validateUploadFile`'s 3 cases). Live verification: upload
+(valid + rejected-type, confirmed zero network calls for the rejected
+attempt), category filter round-trip, download opens a real 5-minute
+signed MinIO URL, remove-with-confirm, non-committee account sees the
+list/Download but no Upload/Remove, both themes screenshotted clean.
+Backend untouched: 101 unit / 327 e2e (Slice 8's baseline, unchanged).
+
+**What's real after Slice 9:** everything from Slices 1–8, plus the
+Workspace Files tab (upload, category filter, download, remove, correct
+RBAC). Minutes and Assets remain the next two Workspace sub-slices.
 
 ---
 
 ## Next step
 
-Frontend Slice 8 (Analytics) merged to `main` — docs-synced, tests green,
-branch deleted (see finish-branch below for confirmation this actually
-happened by the time you're reading this).
+Frontend Slice 9 (Workspace — File Repository) merged to `main` —
+docs-synced, tests green, branch deleted (see finish-branch below for
+confirmation this actually happened by the time you're reading this).
 
-**No frontend slice 9 has been picked yet.** Workspace and Settings remain
-unscoped placeholders. Ask/confirm before starting Slice 9's brainstorm.
+**No frontend slice 10 has been picked yet.** Remaining Workspace
+sub-slices (Meeting Minutes, Asset Management) and Settings are the only
+unscoped work left. Ask/confirm before starting the next brainstorm —
+likely continuing the Workspace split (Minutes or Assets next) unless the
+user wants to jump to Settings instead.
 
 Backend Phase 2 remains fully shipped (11/11 items, see above); Phase 3
 backend items are still unscoped and untouched — the user's focus remains on
 the frontend. Slice 6 remains the only frontend slice to have touched a
 backend file (one real bug fix, `certificates.service.ts` + its e2e test);
-Slices 7 and 8 both held "zero backend files."
+Slices 7, 8, and 9 all held "zero backend files."
 
 Standing preferences remain in force for whatever comes next: pause before
 Task 1, pause before the live-verification task too (added as a standing
@@ -794,17 +854,26 @@ correctness, rather than component unit tests, remains essential — it
 caught nothing in Slices 1, 2, 4, and 5, one bug each in Slices 3 and 8
 (field-id-vs-label mismatch; invisible sparse-line dots), one
 *unrelated*-but-flagged bug in Slice 7 (account-menu crash, fixed
-separately), and **two** in Slice 6 (one frontend, one backend) — Slice 6
-remains the only slice where a live-verification pass surfaced a backend
-defect rather than only frontend gaps. Slice 4 additionally showed the
-inverse: cross-checking types against the Prisma schema *during
+separately), **two** in Slice 6 (one frontend, one backend), and **two**
+in Slice 9 (Cancel-button state leak, uploader-UUID authorization leak) —
+Slice 6 remains the only slice where a live-verification pass surfaced a
+backend defect rather than only frontend gaps. Slice 4 additionally showed
+the inverse: cross-checking types against the Prisma schema *during
 brainstorming* caught two real bugs before any code existed — design-time
 schema cross-checks, live-driving after code exists, and cross-stack
 correctness checks are all worth keeping for future slices, since they
 catch different failure classes. Slice 8 adds one more: a "looks broken"
 observation during live verification (empty-looking bar charts) can be a
 screenshot-compression artifact, not a real bug — confirm via DOM/computed-
-style inspection before treating a visual impression as a defect.
+style inspection before treating a visual impression as a defect. Slice 9
+adds a distinct pattern worth carrying forward to any future feature that
+resolves names/labels by joining against another endpoint's data: check
+whether that *other* endpoint's RBAC tier is actually a subset of the
+*current* feature's visibility — if the current feature is visible to a
+wider audience than the endpoint it depends on for display data, every
+viewer outside that narrower tier will silently hit the "not found"
+fallback path instead of a permission error, which can leak internal ids
+if that fallback isn't designed for an authorization failure specifically.
 
 This doc itself (`docs/current-context.md`) is untracked (`git status` shows
 it as `??`) — it has never been committed. Keep updating it in place; whether

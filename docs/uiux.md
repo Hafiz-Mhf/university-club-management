@@ -754,3 +754,79 @@ in a full-page screenshot — confirmed via `browser_evaluate` that the SVG
 paths and computed fill colors were correct all along, the screenshot was
 just too compressed to show 20px-tall bars clearly). Backend untouched:
 101 unit / 327 e2e (Slice 7's baseline, unchanged).
+
+## Slice 9 — Workspace: File Repository (shipped)
+
+First of three Workspace sub-slices. "Workspace" bundles three independent
+backend subsystems (File Repository, Meeting Minutes, Asset Management)
+behind one nav placeholder — combined, easily 15+ tasks, the same shape of
+problem Slice 2 hit with Events+Registrations, which was split the same
+way. This sub-slice builds the **Files** tab of a new tabbed `/workspace`
+page against the already-shipped `FilesController`: upload (multipart,
+committee-only), list with category filter (any org member), signed
+download (any org member), remove (committee-only). Meeting Minutes and
+Asset Management remain unbuilt, honestly marked inline. Zero new backend
+endpoints.
+
+### `/workspace` becomes a real tabbed page for the first time
+
+Local-state tab row (Files / Minutes / Assets), same lightweight pattern
+as Slice 3's event-detail tabs — no new shadcn Tabs component. This
+sub-slice wires the Files tab fully; Minutes and Assets render a "Coming
+in a later sub-slice" line rather than pretending to be built.
+
+### Two real bugs found live, both frontend-only, both fixed same-session
+
+**Bug 1 — Cancel button skipped the dialog's own reset:** `UploadFileDialog`'s
+Cancel button called the raw `onOpenChange(false)` prop directly instead of
+going through the Dialog's wrapped handler (`(next) => { if (!next) reset();
+onOpenChange(next); }`), so title/category/validation-error state from a
+failed attempt leaked into the next time the dialog opened. Reproduced by
+filling a title, triggering the "Unsupported file type" error with a bad
+file, clicking Cancel, then reopening — the stale title and error were both
+still there. Fixed by having Cancel call `reset()` before `onOpenChange(false)`,
+matching what every other close path already did.
+
+**Bug 2 — a raw uploader UUID leaked to non-committee viewers:** `GET
+/organizations/:orgId/files` is open to any org member, but the uploader
+name resolution (`resolveUploaderName`, joining against `useMembers`) relies
+on `GET /organizations/:orgId/members`, which is `VIEW_MEMBERS`-gated
+(committee-only, confirmed in `memberships.controller.ts` — the same tier as
+`MANAGE_EVENTS` plus nothing extra). For a plain participant, that query
+403s, `members.data` is `undefined`, and `resolveUploaderName`'s "member not
+found" fallback — designed for the genuine rare case of a deleted/missing
+row — fired instead on every single file row, displaying raw internal user
+ids to anyone without committee access. Reproduced by switching to a
+participant test account and finding a UUID where a name should be. Fixed
+at the `FileList` call site (not in `resolveUploaderName` itself, whose
+contract is correct for its actual case): when `members.isError`, render
+"Committee member" instead of resolving a name at all, reserving the raw-id
+fallback for when the member list loaded successfully but a specific
+uploader's row is genuinely absent.
+
+### Client-side validation UX-only, matches Slice 6's disclaimer exactly
+
+`validateUploadFile` mirrors the backend's own `ALLOWED_MIME`/`MAX_FILE_BYTES`
+(pdf/docx/xlsx/pptx/png/jpeg, 20MB) — confirmed live that an unsupported
+file type never reaches the network (checked via `browser_network_requests`:
+only the one successful upload POST appears, the rejected attempt fires
+zero requests).
+
+### Test baseline
+
+Frontend 111/111 (5 new: `resolveUploaderName`'s 2 cases,
+`validateUploadFile`'s 3 cases). Live verification against the real dev
+backend: upload with title+category+file, category filter narrows
+correctly (including back to "All categories"), unsupported file type
+rejected client-side with zero network calls, download opens a real
+5-minute signed MinIO URL, remove-with-confirm removes the row, a
+non-committee account sees the list and Download but no Upload/Remove
+controls, both themes screenshotted clean (plain outline category badge,
+no domain-hue leakage, Workspace nav icon keeps its hue). Two real bugs
+found and fixed live (see above), both frontend-only. Backend untouched:
+101 unit / 327 e2e (Slice 8's baseline, unchanged).
+
+**What's real after Slice 9:** everything from Slices 1–8, plus the
+Workspace Files tab — upload, category filter, download, remove, correct
+RBAC. Minutes and Assets tabs remain honest placeholders, next up as their
+own sub-slices.
