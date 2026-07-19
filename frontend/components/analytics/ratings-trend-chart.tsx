@@ -41,7 +41,7 @@ export function RatingsTrendChart({ data }: { data: RatingsDatum[] }) {
           type="monotone"
           stroke="var(--color-content)"
           strokeWidth={2}
-          dot={false}
+          dot={{ r: 4, strokeWidth: 2, stroke: 'var(--background)', fill: 'var(--color-content)' }}
           connectNulls={false}
         />
         <Line
@@ -49,7 +49,7 @@ export function RatingsTrendChart({ data }: { data: RatingsDatum[] }) {
           type="monotone"
           stroke="var(--color-organization)"
           strokeWidth={2}
-          dot={false}
+          dot={{ r: 4, strokeWidth: 2, stroke: 'var(--background)', fill: 'var(--color-organization)' }}
           connectNulls={false}
         />
         <Line
@@ -57,7 +57,7 @@ export function RatingsTrendChart({ data }: { data: RatingsDatum[] }) {
           type="monotone"
           stroke="var(--color-venue)"
           strokeWidth={2}
-          dot={false}
+          dot={{ r: 4, strokeWidth: 2, stroke: 'var(--background)', fill: 'var(--color-venue)' }}
           connectNulls={false}
         />
       </LineChart>

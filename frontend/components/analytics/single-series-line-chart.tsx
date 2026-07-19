@@ -28,7 +28,7 @@ export function SingleSeriesLineChart({ data, label }: { data: LineDatum[]; labe
           type="monotone"
           stroke="var(--color-value)"
           strokeWidth={2}
-          dot={false}
+          dot={{ r: 4, strokeWidth: 2, stroke: 'var(--background)', fill: 'var(--color-value)' }}
           connectNulls={false}
         />
       </LineChart>
