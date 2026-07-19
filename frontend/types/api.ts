@@ -186,6 +186,19 @@ export interface MyCertificate extends Certificate {
   downloadUrl: string;
 }
 
+export interface FeedbackResponse {
+  id: string;
+  organizationId: string;
+  eventId: string;
+  userId: string;
+  npsScore: number;
+  contentRating: number;
+  organizationRating: number;
+  venueRating: number;
+  comment: string | null;
+  createdAt: string;
+}
+
 export interface Member {
   id: string;
   userId: string;
