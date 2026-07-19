@@ -54,9 +54,16 @@
   --destructive: var(--danger);
   --input: var(--border);
   --ring: var(--primary);
-  --chart-1: var(--domain-events);
-  --chart-2: var(--domain-registrations);
-  --chart-3: var(--domain-attendance);
+  /* Chart-specific tokens (Slice 8 Analytics) — literal hex, not var()
+     references to --domain-*, because the validated triple only passes
+     the dataviz chart-lightness band in BOTH themes at these exact
+     light-mode values; --domain-registrations/--domain-certificates'
+     own dark-mode variants (#5b9cf5/#d9a93e) fail that band for chart
+     use specifically. Not redefined in [data-theme="dark"] on purpose —
+     same three values apply in both themes. */
+  --chart-1: #3f9142;
+  --chart-2: #2f7de1;
+  --chart-3: #b8860b;
   --chart-4: var(--domain-certificates);
   --chart-5: var(--domain-analytics);
   --sidebar: var(--surface-secondary);
