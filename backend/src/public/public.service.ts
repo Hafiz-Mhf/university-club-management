@@ -18,25 +18,25 @@ export class PublicService {
   ) {}
 
   // No TenantGuard on public routes — this explicit existence check is the
-  // only thing standing between a bad orgId and an empty-but-200 response.
-  private async requireOrganization(organizationId: string) {
+  // only thing standing between a bad slug and an empty-but-200 response.
+  private async requireOrganizationBySlug(slug: string) {
     const organization = await this.prisma.organization.findUnique({
-      where: { id: organizationId },
+      where: { slug },
       select: { id: true, name: true, description: true, logoKey: true, bannerKey: true, primaryColor: true, socialLinks: true, advisors: true },
     });
     if (!organization) throw new NotFoundException('Organization not found');
     return organization;
   }
 
-  async getProfile(organizationId: string) {
-    const organization = await this.requireOrganization(organizationId);
+  async getProfile(orgSlug: string) {
+    const organization = await this.requireOrganizationBySlug(orgSlug);
     const logoUrl = organization.logoKey
       ? await this.storage.getSignedDownloadUrl(organization.logoKey, SIGNED_URL_TTL_SECONDS)
       : null;
     const bannerUrl = organization.bannerKey
       ? await this.storage.getSignedDownloadUrl(organization.bannerKey, SIGNED_URL_TTL_SECONDS)
       : null;
-    const upcomingEvents = await this.events.listPublicUpcoming(organizationId);
+    const upcomingEvents = await this.events.listPublicUpcoming(organization.id);
     return {
       name: organization.name,
       description: organization.description,
@@ -49,13 +49,13 @@ export class PublicService {
     };
   }
 
-  async getGallery(organizationId: string) {
-    await this.requireOrganization(organizationId);
-    return this.gallery.list(organizationId);
+  async getGallery(orgSlug: string) {
+    const organization = await this.requireOrganizationBySlug(orgSlug);
+    return this.gallery.list(organization.id);
   }
 
-  async getAchievements(organizationId: string) {
-    await this.requireOrganization(organizationId);
-    return this.achievements.list(organizationId);
+  async getAchievements(orgSlug: string) {
+    const organization = await this.requireOrganizationBySlug(orgSlug);
+    return this.achievements.list(organization.id);
   }
 }

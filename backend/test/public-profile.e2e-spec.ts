@@ -7,6 +7,7 @@ describe('Public profile (e2e)', () => {
   let app: INestApplication;
   let presToken: string;
   let orgId: string;
+  let orgSlug: string;
   const future = (d: number) => new Date(Date.now() + d * 86400000).toISOString();
 
   async function registerAndLogin(email: string) {
@@ -20,7 +21,8 @@ describe('Public profile (e2e)', () => {
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
     await app.init();
     presToken = await registerAndLogin(`pub-${Date.now()}@test.io`);
-    orgId = (await request(app.getHttpServer()).post('/organizations').set('Authorization', `Bearer ${presToken}`).send({ name: 'PubOrg', slug: `pub-${Date.now()}` })).body.id;
+    orgSlug = `pub-${Date.now()}`;
+    orgId = (await request(app.getHttpServer()).post('/organizations').set('Authorization', `Bearer ${presToken}`).send({ name: 'PubOrg', slug: orgSlug })).body.id;
   });
   afterAll(async () => { await app.close(); });
 
@@ -34,7 +36,7 @@ describe('Public profile (e2e)', () => {
       .set('Authorization', `Bearer ${presToken}`).expect(200);
 
     const res = await request(app.getHttpServer())
-      .get(`/public/organizations/${orgId}/profile`)
+      .get(`/public/organizations/${orgSlug}/profile`)
       .expect(200);
     expect(res.body.name).toBe('PubOrg');
     expect(res.body.primaryColor).toBe('#2563eb');
@@ -53,16 +55,16 @@ describe('Public profile (e2e)', () => {
       .expect(201);
 
     const res = await request(app.getHttpServer())
-      .get(`/public/organizations/${orgId}/profile`)
+      .get(`/public/organizations/${orgSlug}/profile`)
       .expect(200);
     expect(res.body.bannerUrl).toBeTruthy();
     const fetched = await fetch(res.body.bannerUrl);
     expect(fetched.status).toBe(200);
   });
 
-  it('404 for a nonexistent orgId', async () => {
+  it('404 for a nonexistent slug', async () => {
     await request(app.getHttpServer())
-      .get('/public/organizations/00000000-0000-0000-0000-000000000000/profile')
+      .get('/public/organizations/this-slug-does-not-exist/profile')
       .expect(404);
   });
 });

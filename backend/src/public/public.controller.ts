@@ -2,24 +2,24 @@ import { Controller, Get, Param } from '@nestjs/common';
 import { PublicService } from './public.service';
 
 // Intentionally unguarded: these routes are the platform's public surface.
-// orgId comes straight from the route param (no TenantGuard to populate
+// orgSlug comes straight from the route param (no TenantGuard to populate
 // req.organizationId); PublicService validates it exists.
-@Controller('public/organizations/:orgId')
+@Controller('public/organizations/:orgSlug')
 export class PublicController {
   constructor(private readonly publicService: PublicService) {}
 
   @Get('profile')
-  getProfile(@Param('orgId') orgId: string) {
-    return this.publicService.getProfile(orgId);
+  getProfile(@Param('orgSlug') orgSlug: string) {
+    return this.publicService.getProfile(orgSlug);
   }
 
   @Get('gallery')
-  getGallery(@Param('orgId') orgId: string) {
-    return this.publicService.getGallery(orgId);
+  getGallery(@Param('orgSlug') orgSlug: string) {
+    return this.publicService.getGallery(orgSlug);
   }
 
   @Get('achievements')
-  getAchievements(@Param('orgId') orgId: string) {
-    return this.publicService.getAchievements(orgId);
+  getAchievements(@Param('orgSlug') orgSlug: string) {
+    return this.publicService.getAchievements(orgSlug);
   }
 }
