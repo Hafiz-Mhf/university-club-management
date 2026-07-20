@@ -1315,3 +1315,76 @@ worked around. Zero code bugs. Backend untouched: 101 unit / 327 e2e
 Gallery management under a new "Public Page" nav area — upload, view,
 and remove, correctly RBAC-gated. Achievements management remains the
 last Public Club Page sub-slice.
+
+## Slice 15 — Achievements Management (shipped)
+
+**Scope:** third and last of three Public Club Page sub-slices — full
+committee-side management (create, list, update, remove) for the
+already-shipped `AchievementsController`. Replaces the Achievements tab
+placeholder shipped in Slice 14. Completes the epic.
+
+### Modal-dialog CRUD, mirroring Assets exactly
+
+`AchievementDialog` is conditionally-mounted (no `open` prop — the caller
+renders it only while a dialog is in use), the same reset-bug-avoidance
+shape as Slice 10's `AssetDialog`. `year` is handled as a string form
+field with a `.refine()` check converting to an integer at submit —
+identical pattern to Assets' `quantity` field. No year bound beyond
+`Number.isInteger` is enforced: the backend DTO only checks `@IsInt()`
+with no min/max either side, so the frontend doesn't invent a stricter
+rule than the backend actually enforces.
+
+### No auth-leak-guard needed — the field is simply never rendered
+
+`AchievementsService.list()` returns the full Prisma row, including
+`createdByUserId` — the same shape of risk Assets carries. But
+`AchievementsList` renders only `title`/`year`/`description`; the
+`createdByUserId` field exists in the data and is simply never read by
+any component. No `useMembers` call, no name-resolution helper, no
+`members.isError ? 'Committee member' : ...` guard — there is nothing to
+resolve because nothing referencing member identity is ever displayed.
+This is the second Public Club Page sub-slice (after Gallery) where the
+usual Files/Assets/Minutes resolver-guard pattern doesn't apply, but for
+a different reason: Gallery's response has no identity field at all,
+while Achievements' response has one that the UI just never touches.
+
+### Nav-gated, not route-gated — the same pattern, a third time
+
+The "Public Page" nav link is committee-only; a non-committee visitor who
+navigates directly to the URL sees the Achievements tab read-only (no Add
+button, no Edit/Remove per row) rather than a redirect — identical to how
+Gallery (Slice 14) and Workspace's tabs (Slice 9+) already behave.
+
+### A recurring operational detour, not a code bug (third occurrence)
+
+The sidebar's theme-toggle button was again intercepted by the
+`<nextjs-portal>` dev-overlay hit-region on the first pointer-based click
+attempt during the dark/light screenshot check. This time the fix was
+applied immediately — keyboard activation (`.focus()` + `Enter`) — rather
+than retrying the pointer approach multiple times first, since the root
+cause and fix were already established in Slice 14. The underlying theme
+mechanism itself remains unmodified since Slice 1.
+
+### Test baseline
+
+Frontend 154/154 (5 new: `achievementFormSchema`'s valid-submission/
+empty-title/empty-description/non-integer-year/empty-year cases). Live
+verification used fresh PRESIDENT and PARTICIPANT accounts registered
+directly via the API — the database's existing rows were all ephemeral
+e2e-test artifacts from prior automated test runs, with unknown
+passwords, not usable for manual login. Added two achievements and
+confirmed year-desc sort; edited one (year + description) and confirmed
+the dialog pre-filled with its current values and the change persisted
+after a full page reload; removed the other with the confirm dialog;
+confirmed the PARTICIPANT account has no "Public Page" nav link but
+reaches the page read-only via direct URL, with no Add/Edit/Remove
+controls; confirmed the edited achievement appears correctly on the real
+`/club/[orgSlug]` public page from Slice 13 — closing the loop across all
+three Public Club Page sub-slices end-to-end. Both themes screenshotted
+clean. Zero code bugs. Backend untouched: 101 unit / 327 e2e (unchanged).
+
+**What's real after Slice 15:** everything from Slices 1–14, plus full
+Achievements management — create, edit, remove, correctly RBAC-gated.
+**This completes the entire Public Club Page epic:** Public Club Page
+(13), Gallery Management (14), and Achievements Management (15) are all
+shipped. No placeholder tabs remain anywhere in the app.

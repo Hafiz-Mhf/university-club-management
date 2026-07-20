@@ -1163,6 +1163,69 @@ Backend untouched: 101 unit / 327 e2e (Slice 13's baseline, unchanged).
 Gallery management under a new "Public Page" nav area. Achievements
 management remains the last Public Club Page sub-slice.
 
+### Frontend Slice 15 — Achievements Management (shipped, `feature/frontend-slice15-achievements-management`)
+
+Spec: `docs/superpowers/specs/2026-07-20-frontend-slice15-achievements-management-design.md`.
+Plan: `docs/superpowers/plans/2026-07-20-frontend-slice15-achievements-management.md`.
+
+**Scope:** third and last of three Public Club Page sub-slices — full
+committee-side management UI for the already-shipped
+`AchievementsController` (create, list, update, remove). No new backend
+endpoints. Replaces the "Public Page" nav area's Achievements tab
+placeholder shipped in Slice 14.
+
+5 code tasks, one commit each: achievements data layer (`0a5e7f6`),
+achievement form schema (`47e366e`), `AchievementDialog` (`2caf8fb`),
+`AchievementsList` with remove confirm (`215f78d`), Achievements tab
+wiring — create/edit/remove (`0cf461a`); Task 6 (live verification)
+found **zero code bugs**.
+
+**Modal-dialog CRUD, same shape as Assets (Slice 10):** `AchievementDialog`
+is conditionally-mounted (no `open` prop — caller renders it only while in
+use), fields title/description/year, year handled as a string form field
+with `.refine()` validation converting to an integer at submit — identical
+pattern to Assets' `quantity` field. No year bound is enforced beyond
+`Number.isInteger`, mirroring the backend DTO's `@IsInt()` with no min/max
+either side.
+
+**No auth-leak-guard needed, same reasoning as Gallery:** `AchievementsService.list()`
+returns the full Prisma row including `createdByUserId`, but
+`AchievementsList` simply never renders that field — title/year/description
+only. No `useMembers` call, no name-resolution helper, nothing to guard.
+
+**Nav-gated, not route-gated:** same Workspace/Gallery pattern — the
+"Public Page" nav link is committee-only, but a non-committee visitor who
+navigates directly to the URL sees the Achievements tab read-only (no Add
+button, no Edit/Remove per row) rather than a redirect.
+
+**Test baseline:** frontend 154/154 (5 new — `achievementFormSchema`'s
+cases: valid submission, empty title, empty description, non-integer
+year, empty year). Live verification (fresh PRESIDENT + PARTICIPANT
+accounts registered via the API, since the DB's existing rows were all
+ephemeral e2e-test artifacts with unknown passwords): added two
+achievements, confirmed year-desc sort; edited one (year + description),
+confirmed the dialog pre-filled with current values and the change
+persisted after reload; removed the other with confirm; confirmed the
+PARTICIPANT account has no "Public Page" nav link but reaches the page
+read-only via direct URL (no Add/Edit/Remove); confirmed the edited
+achievement appears correctly on the real `/club/[orgSlug]` public page
+from Slice 13 — closing the loop across all three Public Club Page
+sub-slices end-to-end; both themes screenshotted clean. Backend untouched:
+101 unit / 327 e2e (unchanged).
+
+**A recurring operational detour, not a code bug (3rd occurrence):** the
+sidebar's theme-toggle button was again intercepted by the `<nextjs-portal>`
+dev-overlay hit-region on the first pointer-based click attempt. Switched
+to keyboard activation (`.focus()` + `Enter`) immediately this time rather
+than retrying the pointer approach, per the threshold established in
+Slice 14.
+
+**What's real after Slice 15:** everything from Slices 1–14, plus full
+Achievements management. **This completes the entire Public Club Page
+epic** — Public Club Page (13), Gallery Management (14), and Achievements
+Management (15) all shipped. No placeholder tabs remain anywhere in the
+app.
+
 ---
 
 ## Next step
