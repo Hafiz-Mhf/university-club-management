@@ -937,23 +937,109 @@ complete Workspace surface — Files, Assets, and Meeting Minutes. All three
 Workspace sub-slices are shipped; Settings is the only remaining unscoped
 placeholder in the entire frontend.
 
+### Frontend Slice 12 — Settings (shipped, `feature/frontend-slice12-settings`)
+
+Spec: `docs/superpowers/specs/2026-07-20-frontend-slice12-settings-design.md`.
+Plan: `docs/superpowers/plans/2026-07-20-frontend-slice12-settings.md`.
+
+**Scope:** the last unscoped nav placeholder. Two tabs on one `/settings`
+page: **Organization** (profile — name/description/socialLinks/advisors;
+branding — logo/banner upload+remove; colors — primaryColor/secondaryColor;
+committee-visible, PRESIDENT+VP edit profile/branding, PRESIDENT-only edit
+colors) and **My Account** (PDPA — consent history, data export, delete
+account; every member, no gate). Nav item `minTier` changed from
+`'committee'` to `'member'` so non-committee members can reach My Account.
+No new backend endpoints.
+
+11 code tasks, one commit each: type/role tiers (`ba53418`, folded in a
+pre-existing `tsc --noEmit` fix unrelated to this slice, `701c230`),
+branding-image validation (`1449e24`), profile/color schemas (`2fba837`),
+org mutation hooks (`9ad3231`), social-links/advisors field arrays
+(`ac1f0dd`), `OrganizationProfileForm` (`c623f2d`), `BrandingPanel`
+(`6f08043`), `OrgColorForm` (`a865ead`), PDPA data layer (`a43f401`), My
+Account components (`5da6d37`), page wiring + nav change (`9872d41`); Task
+12 (live verification) found **zero code bugs**.
+
+**Pre-existing bug fixed incidentally, unrelated to this slice's scope:**
+`tsc --noEmit` failed on 5 lines in `lib/__tests__/api.test.ts`
+(`TS18046 'err' is of type 'unknown'`) — a gap that had existed since
+those tests were written, never caught before because this is the first
+slice whose Task 1 typecheck step ran across the whole repo after touching
+a shared type (`Organization`). Fixed by casting the caught error to
+`ApiError` at each assertion site. Not part of the plan's scope, fixed
+because it blocked Task 1's own verification step.
+
+**Two RBAC tiers on one tab, not one:** unlike every prior slice (which had
+at most a two-tier split), Organization has three distinct visibility/edit
+levels on a single page — committee to view, PRESIDENT+VP to edit
+profile/branding, PRESIDENT-only to edit colors. `canManageOrgProfile`
+reuses the existing `MANAGE_ROLES_ROLES` array (identical role set to
+Slice 4's `canManageRoles`) under a feature-specific name rather than
+duplicating the list or reusing the old name out of context.
+
+**First account-level, cross-org, irreversible action in this frontend:**
+`DeleteAccountDialog` requires typing `DELETE MY ACCOUNT` exactly
+(case-sensitive) before the confirm button enables — stronger than every
+prior destructive-confirm dialog in this app (all plain Cancel/Confirm),
+justified because `DELETE /me` is the only action that isn't scoped to one
+org and isn't undoable by re-creating a row. Live verification exercised
+**both** branches of this endpoint for the first time in a manual pass:
+the 409 sole-active-president guard (backend message rendered verbatim,
+dialog stays open) using the PRESIDENT test account, and the actual
+success path (account anonymized, `clearSession()` + redirect to
+`/login`) using the PARTICIPANT test account — confirmed anonymized in
+the database afterward.
+
+**Export-as-download, not render-inline:** `GET /me/export` returns a
+synchronous, non-persisted JSON object (no signed URL, no storage row) —
+modeled as a `useMutation` (triggered on click) rather than a `useQuery`,
+with `onSuccess` building a `Blob` and triggering a browser download via a
+transient `<a>` element. First time this app downloads client-generated
+(not server-signed) file content.
+
+**Test baseline:** frontend 145/145 (19 new — 2 role-tier tests, 4
+branding-image validation cases, 10 profile/color schema cases, 3
+delete-confirm-text cases). Live verification: full profile edit + social
+links/advisors add-remove-save-reload cycle; logo+banner upload and
+remove; invalid-file-type rejection confirmed client-side only; color
+edit as PRESIDENT with the sidebar's `--primary` CSS variable confirmed
+picking up the new value live; VP confirmed seeing disabled color fields
+with the "President only" hint; consent history/export/both delete-account
+branches confirmed as above; PARTICIPANT confirmed seeing only the My
+Account tab with no tab-switcher UI at all; both themes screenshotted
+clean. Backend untouched: 101 unit / 327 e2e (Slice 11's baseline,
+unchanged).
+
+**What's real after Slice 12:** everything from Slices 1–11, plus full
+Settings — organization profile/branding/color management with two RBAC
+tiers, and My Account PDPA actions available to every member. **No
+placeholder routes remain in the frontend.**
+
 ---
 
 ## Next step
 
-Frontend Slice 11 (Workspace — Meeting Minutes) merged to `main` —
-docs-synced, tests green, branch deleted (see finish-branch below for
-confirmation this actually happened by the time you're reading this).
+Frontend Slice 12 (Settings) merged to `main` — docs-synced, tests green,
+branch deleted (see finish-branch below for confirmation this actually
+happened by the time you're reading this).
 
-**No frontend slice 12 has been picked yet.** Settings is the only
-remaining unscoped placeholder in the whole frontend. Ask/confirm before
-starting the next brainstorm.
+**All twelve frontend slices are shipped. No placeholder routes remain.**
+The only frontend surface with zero UI at all is the Public Club Page
+(backend `gallery`/`achievements`/`public` modules, shipped in Phase 2) —
+it's an unauthenticated route with no sidebar nav entry, so it was never a
+"placeholder" in the nav-item sense these slices tracked, but it has no
+frontend either. Next frontend work, if any, would need to be scoped as a
+fresh brainstorm (its own spec) rather than picked from an existing
+placeholder list. Otherwise, Phase 3 backend items remain the other
+unscoped option — ask/confirm before starting either.
 
 Backend Phase 2 remains fully shipped (11/11 items, see above); Phase 3
-backend items are still unscoped and untouched — the user's focus remains on
-the frontend. Slice 6 remains the only frontend slice to have touched a
-backend file (one real bug fix, `certificates.service.ts` + its e2e test);
-Slices 7 through 11 all held "zero backend files."
+backend items are still unscoped and untouched. Slice 6 remains the only
+frontend slice to have touched a backend *feature* file (one real bug fix,
+`certificates.service.ts` + its e2e test); Slice 12 touched one backend-
+adjacent-but-not-feature file only in the sense that it fixed a pre-existing
+frontend test-typing gap, not backend code — Slices 7 through 12 all held
+"zero backend files."
 
 Standing preferences remain in force for whatever comes next: pause before
 Task 1, pause before the live-verification task too (added as a standing
@@ -963,9 +1049,9 @@ writing plan task-numbering (frontend `npm test`/`npm run build` alongside
 backend `npm test`/`npm run test:e2e`). Live-driving the actual flow (dev
 server + Playwright) as the real verification step for page-level
 correctness, rather than component unit tests, remains essential — it
-caught nothing in Slices 1, 2, 4, 5, 10, and 11, one bug each in Slices 3
-and 8 (field-id-vs-label mismatch; invisible sparse-line dots), one
-*unrelated*-but-flagged bug in Slice 7 (account-menu crash, fixed
+caught nothing in Slices 1, 2, 4, 5, 10, 11, and 12, one bug each in
+Slices 3 and 8 (field-id-vs-label mismatch; invisible sparse-line dots),
+one *unrelated*-but-flagged bug in Slice 7 (account-menu crash, fixed
 separately), **two** in Slice 6 (one frontend, one backend), and **two**
 in Slice 9 (Cancel-button state leak, uploader-UUID authorization leak) —
 Slice 6 remains the only slice where a live-verification pass surfaced a
@@ -992,7 +1078,20 @@ class of failure by checking for actually-listening ports and process
 counts before assuming new route code is broken — confirmed twice now
 (docker stack, dev-server cache) that "environment came back wrong after
 a restart" is a real and recurring category on this machine, not a one-off.
+Slice 12 adds a final lesson: a plan's Task 1 typecheck step can surface a
+**pre-existing, unrelated** `tsc` failure the moment it touches a shared
+type used broadly (here, `Organization`) — `npm test` alone doesn't
+typecheck, so such gaps can sit invisible for many slices; fixing them
+inline (small, unrelated, blocking the current task's own verification) is
+correct and doesn't need to wait for a dedicated cleanup pass. Also: when a
+live-verification checklist includes an action with two distinct backend
+branches (here, `DELETE /me`'s 409-guard vs. success path), drive **both**
+branches with separate test accounts rather than stopping once one path is
+proven — the success path (real anonymization, real redirect) was the one
+more likely to hide a bug, and would have gone unverified if the 409 case
+alone had been treated as sufficient.
 
-This doc itself (`docs/current-context.md`) is untracked (`git status` shows
-it as `??`) — it has never been committed. Keep updating it in place; whether
-to commit it is the user's call, not assumed.
+This doc itself (`docs/current-context.md`) has been tracked and committed
+alongside every docs-sync since Slice 9 — the earlier note claiming it was
+untracked was stale. Keep updating and committing it in place at each
+docs-sync.

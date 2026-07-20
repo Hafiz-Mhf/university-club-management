@@ -1001,3 +1001,121 @@ complete Workspace surface — Files, Assets, and now Meeting Minutes
 (create, paginated browse, read-only detail, edit, remove). All three
 Workspace sub-slices are shipped; Settings is the only remaining unscoped
 placeholder in the entire frontend.
+
+## Slice 12 — Settings (shipped)
+
+**Scope:** the last unscoped nav placeholder. `/settings` is a local-state
+tabbed page (same shape as `/workspace`): **Organization** and **My
+Account**. No new backend endpoints — everything already existed behind
+`OrganizationsController` and `PdpaController`.
+
+### Three RBAC tiers on one page — a first for this frontend
+
+Every prior slice's role split topped out at two tiers per feature area.
+Settings' Organization tab has three: committee to even see the tab
+(`isCommittee`, matching the sidebar nav's own gate), PRESIDENT+VP to edit
+profile/branding (`canManageOrgProfile` — reuses Slice 4's
+`MANAGE_ROLES_ROLES` array under a feature-specific name rather than
+duplicating the list or reusing the old name out of context), and
+PRESIDENT-only to edit colors (`canManageOrgColors`, a fresh
+one-role array). The color fields render for VP too, just `disabled` with
+a "President only" hint — visible-but-inert, not hidden, matching this
+app's established preference for explaining a stricter gate rather than
+pretending the control doesn't exist.
+
+### Free-form backend shapes get free-form editors, not invented structure
+
+`socialLinks` (`Record<string,string>`) and `advisors` (`string[]`) are
+both genuinely free-form on the backend — no fixed platform enum, no
+advisor-title field. The Organization tab edits both as repeatable
+`useFieldArray` rows (key+value pairs for social links, a single text
+field for advisors) rather than inventing a fixed platform picker or an
+advisor-title/email shape the backend doesn't store. `SocialLinksFields`/
+`AdvisorsFields` both read `useFormContext` rather than taking a `control`
+prop directly — the parent `OrganizationProfileForm` wraps its `<form>` in
+RHF's `<FormProvider>`, the first use of that pattern in this codebase
+(every prior multi-field-array form, e.g. Slice 11's `MinutesForm`, passed
+`control` straight through as a prop instead).
+
+### Branding upload: inline, not a dialog
+
+Logo/banner upload uses a plain preview box, a native `<input type="file">`,
+and Upload/Remove buttons directly on the page, not a modal — this app's
+first branding-adjacent upload UI, and deliberately simpler than Slice 9's
+`UploadFileDialog` or Slice 6's certificate-upload dialog since there's
+exactly one purpose per slot and no dialog-open/close lifecycle to manage.
+Client-side validation (`validateBrandingImage`, mirroring the backend's
+`image/png|jpeg|webp` + 2MB limit) runs before the upload mutation fires,
+same fast-fail pattern as every prior upload feature.
+
+### My Account: the first account-level, cross-org, irreversible action
+
+`DeleteAccountDialog` requires typing `DELETE MY ACCOUNT` exactly
+(case-sensitive) before its confirm button enables, stronger than every
+other destructive-confirm dialog in this app (all of which are plain
+Cancel/Confirm — file/asset/minutes remove, event cancel). Justified
+because `DELETE /me` is the only action in the whole app that is neither
+scoped to a single org nor recoverable by re-creating a row — it
+anonymizes the account and revokes every session across every
+organization the user belongs to.
+
+`GET /me/export` returns a synchronous, non-persisted JSON object — no
+storage row, no signed URL. Modeled as a `useMutation` (fires on click)
+rather than a `useQuery`, with `onSuccess` building a `Blob` and
+triggering a browser download via a transient `<a>` element — this app's
+first client-generated file download (every prior download — certificates,
+files — fetches a server-signed MinIO URL instead).
+
+### Live verification exercised both branches of an irreversible endpoint
+
+`DELETE /me` has two outcomes: a 409 when the caller is the sole active
+PRESIDENT of any org, or a real anonymization otherwise. Both were driven
+for real: the PRESIDENT test account hit the 409 (backend message
+rendered verbatim in the dialog, dialog stays open, confirm text
+preserved), and the PARTICIPANT test account — confirmed via direct DB
+query to hold no PRESIDENT membership anywhere first — was actually
+deleted, producing the real success path (`clearSession()` +
+`router.replace('/login')`), then reverified anonymized in the database
+afterward. Driving only the 409 case would have left the success path,
+arguably the riskier of the two, unverified.
+
+### Pre-existing typecheck gap, fixed incidentally
+
+Task 1 touched the shared `Organization` type, and running
+`tsc --noEmit` (part of every task's verification step across this whole
+project) surfaced 5 pre-existing failures in `lib/__tests__/api.test.ts`
+(`TS18046 'err' is of type 'unknown'`) that had sat invisible since
+those tests were written — `npm test` alone doesn't typecheck, so nothing
+had caught them until a task happened to touch a type broad enough to
+force a full-repo `tsc` pass. Fixed inline (cast the caught error to
+`ApiError` at each assertion) since it blocked Task 1's own verification
+step, not because it was in scope — the same "fix it, it's small and
+blocking" call this project made for isolated pre-existing bugs before
+(e.g. the `'MEMBER'`-vs-`'PARTICIPANT'` fixture bug in Slice 10).
+
+### Test baseline
+
+Frontend 145/145 (19 new: 2 role-tier truth-table tests, 4
+`validateBrandingImage` cases, 10 profile/color schema cases, 3
+delete-confirm-text matcher cases). Live verification: full profile edit
+(name/description/social-links-add-remove/advisors-add) with a real
+save→reload→persisted cycle; logo and banner upload with real PNG bytes,
+preview updating each time; an unsupported file type rejected client-side
+with no network call; logo removed and confirmed reverting to the
+placeholder icon while banner stayed untouched; colors edited as
+PRESIDENT with the sidebar's `--primary` CSS custom property confirmed
+picking up the new value live (no reload needed); VP confirmed seeing the
+color fields disabled with the hint text; My Account's consent history
+showing a real row, data export producing a real downloadable JSON file
+with all expected top-level keys, and both `DELETE /me` branches proven as
+described above; a PARTICIPANT account confirmed seeing only the My
+Account tab with no tab-switcher control rendered at all (not just a
+hidden Organization tab); both themes screenshotted clean, disabled color
+fields legible in both. Zero code bugs. Backend untouched: 101 unit / 327
+e2e (Slice 11's baseline, unchanged).
+
+**What's real after Slice 12:** everything from Slices 1–11, plus full
+Settings — organization profile/branding/color management across three
+RBAC tiers, and My Account PDPA actions (consent history, data export,
+account deletion) available to every member regardless of role. **No
+placeholder routes remain anywhere in the frontend.**
