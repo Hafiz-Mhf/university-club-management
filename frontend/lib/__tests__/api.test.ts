@@ -123,7 +123,7 @@ describe('api client', () => {
     });
     fetchMock.mockResolvedValueOnce(jsonResponse(404, { message: 'Not found' }));
 
-    const err = await api('/organizations/nope').catch((e) => e);
+    const err = (await api('/organizations/nope').catch((e) => e)) as ApiError;
 
     expect(err).toBeInstanceOf(ApiError);
     expect(err.status).toBe(404);
@@ -143,7 +143,7 @@ describe('api client', () => {
       jsonResponse(403, { message: 'Account consent must be renewed' }),
     );
 
-    const err = await api('/organizations').catch((e) => e);
+    const err = (await api('/organizations').catch((e) => e)) as ApiError;
 
     expect(err).toBeInstanceOf(ApiError);
     expect(err.status).toBe(403);
@@ -244,7 +244,7 @@ describe('apiUpload', () => {
     });
     fetchMock.mockResolvedValueOnce(jsonResponse(409, { message: 'A certificate already exists for this person and event' }));
 
-    const err = await apiUpload('/path', new FormData()).catch((e) => e);
+    const err = (await apiUpload('/path', new FormData()).catch((e) => e)) as ApiError;
 
     expect(err).toBeInstanceOf(ApiError);
     expect(err.status).toBe(409);
