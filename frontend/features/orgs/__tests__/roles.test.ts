@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { canManageAttendance, canManageMembers, canManageRoles, isCommittee } from '@/features/orgs/roles';
+import {
+  canManageAttendance,
+  canManageMembers,
+  canManageOrgColors,
+  canManageOrgProfile,
+  canManageRoles,
+  isCommittee,
+} from '@/features/orgs/roles';
 import type { MembershipRole } from '@/types/api';
 
 const ALL: MembershipRole[] = [
@@ -48,5 +55,27 @@ describe('canManageRoles', () => {
       ADVISOR: false,
     };
     for (const role of ALL) expect(canManageRoles(role)).toBe(expected[role]);
+  });
+});
+
+describe('canManageOrgProfile', () => {
+  it('is true only for PRESIDENT and VICE_PRESIDENT', () => {
+    const expected: Record<MembershipRole, boolean> = {
+      PRESIDENT: true, VICE_PRESIDENT: true, SECRETARY: false, TREASURER: false,
+      EVENT_DIRECTOR: false, COMMITTEE: false, VOLUNTEER: false, PARTICIPANT: false,
+      ADVISOR: false,
+    };
+    for (const role of ALL) expect(canManageOrgProfile(role)).toBe(expected[role]);
+  });
+});
+
+describe('canManageOrgColors', () => {
+  it('is true only for PRESIDENT', () => {
+    const expected: Record<MembershipRole, boolean> = {
+      PRESIDENT: true, VICE_PRESIDENT: false, SECRETARY: false, TREASURER: false,
+      EVENT_DIRECTOR: false, COMMITTEE: false, VOLUNTEER: false, PARTICIPANT: false,
+      ADVISOR: false,
+    };
+    for (const role of ALL) expect(canManageOrgColors(role)).toBe(expected[role]);
   });
 });

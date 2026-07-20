@@ -27,6 +27,8 @@ const orgA: Organization = {
   description: null,
   primaryColor: null,
   secondaryColor: null,
+  socialLinks: null,
+  advisors: null,
 };
 
 describe('OrgProvider', () => {

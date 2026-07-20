@@ -38,6 +38,8 @@ export interface Organization {
   secondaryColor: string | null;
   logoUrl?: string | null;
   bannerUrl?: string | null;
+  socialLinks: Record<string, string> | null;
+  advisors: string[] | null;
 }
 
 export interface MyMembership {

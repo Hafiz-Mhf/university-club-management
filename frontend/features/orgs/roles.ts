@@ -44,3 +44,19 @@ export const MANAGE_ATTENDANCE_ROLES: MembershipRole[] = [...COMMITTEE_ROLES, 'V
 export function canManageAttendance(role: MembershipRole): boolean {
   return MANAGE_ATTENDANCE_ROLES.includes(role);
 }
+
+// Mirrors backend OrganizationsController's `@Roles('PRESIDENT', 'VICE_PRESIDENT')`
+// on profile/logo/banner endpoints — identical role set to MANAGE_ROLES_ROLES
+// above, reused rather than duplicated, but named for this feature's own
+// call sites so intent stays clear at each usage.
+export function canManageOrgProfile(role: MembershipRole): boolean {
+  return MANAGE_ROLES_ROLES.includes(role);
+}
+
+// Mirrors backend's `@Roles('PRESIDENT')` on PATCH .../settings — one tier
+// stricter than canManageOrgProfile.
+const ORG_COLORS_ROLES: MembershipRole[] = ['PRESIDENT'];
+
+export function canManageOrgColors(role: MembershipRole): boolean {
+  return ORG_COLORS_ROLES.includes(role);
+}
