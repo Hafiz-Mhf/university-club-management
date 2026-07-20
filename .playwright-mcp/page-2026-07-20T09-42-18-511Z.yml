@@ -1,0 +1,73 @@
+- generic [ref=f1e1]:
+  - button "Open Next.js Dev Tools" [ref=f1e10] [cursor=pointer]
+  - alert [ref=f1e14]
+  - generic [ref=f1e16]:
+    - complementary [ref=f1e17]:
+      - generic [ref=f1e18]:
+        - button [ref=f1e101] [cursor=pointer]:
+          - generic [ref=f1e20]: SV
+          - generic [ref=f1e22]: Slice15 Verify Club
+        - navigation [ref=f1e102]:
+          - link [ref=f1e103] [cursor=pointer]:
+            - /url: /slice15-verify-club
+            - text: Dashboard
+          - link [ref=f1e104] [cursor=pointer]:
+            - /url: /slice15-verify-club/events
+            - text: Events
+          - link [ref=f1e105] [cursor=pointer]:
+            - /url: /slice15-verify-club/members
+            - text: Members
+          - link [ref=f1e106] [cursor=pointer]:
+            - /url: /slice15-verify-club/attendance
+            - text: Attendance
+          - link [ref=f1e107] [cursor=pointer]:
+            - /url: /slice15-verify-club/certificates
+            - text: Certificates
+          - link [ref=f1e108] [cursor=pointer]:
+            - /url: /slice15-verify-club/feedback
+            - text: Feedback
+          - link [ref=f1e109] [cursor=pointer]:
+            - /url: /slice15-verify-club/analytics
+            - text: Analytics
+          - link [ref=f1e110] [cursor=pointer]:
+            - /url: /slice15-verify-club/workspace
+            - text: Workspace
+          - link [ref=f1e111] [cursor=pointer]:
+            - /url: /slice15-verify-club/public-page
+            - text: Public Page
+          - link [ref=f1e112] [cursor=pointer]:
+            - /url: /slice15-verify-club/settings
+            - text: Settings
+        - generic [ref=f1e72]:
+          - button [ref=f1e113]
+          - button [ref=f1e114] [cursor=pointer]
+    - generic [ref=f1e80]:
+      - banner [ref=f1e81]:
+        - navigation [ref=f1e115]:
+          - generic [ref=f1e83]: Slice15 Verify Club
+          - generic [ref=f1e84]: /
+          - generic [ref=f1e85]: Public Page
+      - main [ref=f1e87]:
+        - generic [ref=f1e88]:
+          - heading [level=1] [ref=f1e116]: Public Page
+          - button [ref=f1e117]: Add achievement
+        - generic [ref=f1e90]:
+          - button [ref=f1e118]: Gallery
+          - button [ref=f1e119]: Achievements
+        - paragraph [ref=f1e100]: No achievements yet.
+  - dialog [ref=f1e123]:
+    - heading "Add achievement" [level=2] [ref=f1e125]
+    - generic [ref=f1e126]:
+      - generic [ref=f1e127]:
+        - generic [ref=f1e128]: Title
+        - textbox "Title" [active] [ref=f1e129]
+      - generic [ref=f1e130]:
+        - generic [ref=f1e131]: Description
+        - textbox "Description" [ref=f1e132]
+      - generic [ref=f1e133]:
+        - generic [ref=f1e134]: Year
+        - textbox "Year" [ref=f1e135]: "2026"
+      - generic [ref=f1e136]:
+        - button "Cancel" [ref=f1e137]
+        - button "Add" [ref=f1e138]
+    - button "Close" [ref=f1e139]

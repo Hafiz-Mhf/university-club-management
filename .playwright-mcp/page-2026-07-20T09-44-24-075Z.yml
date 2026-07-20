@@ -1,0 +1,65 @@
+- generic [ref=f2e1]:
+  - button "Open Next.js Dev Tools" [ref=f2e10] [cursor=pointer]
+  - alert [ref=f2e14]
+  - generic [ref=f2e16]:
+    - complementary [ref=f2e17]:
+      - generic [ref=f2e18]:
+        - button "SV Slice15 Verify Club" [ref=f2e162] [cursor=pointer]:
+          - generic [ref=f2e20]: SV
+          - generic [ref=f2e22]: Slice15 Verify Club
+        - navigation "Main navigation" [ref=f2e163]:
+          - link "Dashboard" [ref=f2e164] [cursor=pointer]:
+            - /url: /slice15-verify-club
+          - link "Events" [ref=f2e165] [cursor=pointer]:
+            - /url: /slice15-verify-club/events
+          - link "Members" [ref=f2e166] [cursor=pointer]:
+            - /url: /slice15-verify-club/members
+          - link "Attendance" [ref=f2e167] [cursor=pointer]:
+            - /url: /slice15-verify-club/attendance
+          - link "Certificates" [ref=f2e168] [cursor=pointer]:
+            - /url: /slice15-verify-club/certificates
+          - link "Feedback" [ref=f2e169] [cursor=pointer]:
+            - /url: /slice15-verify-club/feedback
+          - link "Analytics" [ref=f2e170] [cursor=pointer]:
+            - /url: /slice15-verify-club/analytics
+          - link "Workspace" [ref=f2e171] [cursor=pointer]:
+            - /url: /slice15-verify-club/workspace
+          - link "Public Page" [ref=f2e172] [cursor=pointer]:
+            - /url: /slice15-verify-club/public-page
+          - link "Settings" [ref=f2e173] [cursor=pointer]:
+            - /url: /slice15-verify-club/settings
+        - generic [ref=f2e72]:
+          - 'button "Theme: dark" [ref=f2e174]'
+          - button "Account menu" [ref=f2e175] [cursor=pointer]
+    - generic [ref=f2e80]:
+      - banner [ref=f2e81]:
+        - navigation "Breadcrumb" [ref=f2e176]:
+          - generic [ref=f2e83]: Slice15 Verify Club
+          - generic [ref=f2e84]: /
+          - generic [ref=f2e85]: Public Page
+      - main [ref=f2e87]:
+        - generic [ref=f2e88]:
+          - heading "Public Page" [level=1] [ref=f2e177]
+          - button "Add achievement" [ref=f2e178]
+        - generic [ref=f2e90]:
+          - button "Gallery" [ref=f2e179]
+          - button "Achievements" [ref=f2e180]
+        - generic [ref=f2e100]:
+          - generic [ref=f2e101]:
+            - generic [ref=f2e102]:
+              - paragraph [ref=f2e103]:
+                - text: Best Club Award
+                - generic [ref=f2e104]: — 2024
+              - paragraph [ref=f2e105]: "Updated: outstanding leadership and impact."
+            - generic [ref=f2e106]:
+              - button "Edit" [ref=f2e181]
+              - button "Remove" [ref=f2e182]
+          - generic [ref=f2e109]:
+            - generic [ref=f2e110]:
+              - paragraph [ref=f2e111]:
+                - text: Founders Recognition
+                - generic [ref=f2e112]: — 2020
+              - paragraph [ref=f2e113]: Awarded at the founding ceremony.
+            - generic [ref=f2e114]:
+              - button "Edit" [active] [ref=f2e183]
+              - button "Remove" [ref=f2e184]

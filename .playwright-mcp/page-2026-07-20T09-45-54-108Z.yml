@@ -1,0 +1,41 @@
+- generic [ref=f5e1]:
+  - button "Open Next.js Dev Tools" [ref=f5e10] [cursor=pointer]
+  - alert [ref=f5e14]
+  - generic [ref=f5e16]:
+    - complementary [ref=f5e17]:
+      - generic [ref=f5e18]:
+        - button "SV Slice15 Verify Club" [ref=f5e19] [cursor=pointer]:
+          - generic [ref=f5e20]: SV
+          - generic [ref=f5e22]: Slice15 Verify Club
+        - navigation "Main navigation" [ref=f5e26]:
+          - link "Dashboard" [ref=f5e27] [cursor=pointer]:
+            - /url: /slice15-verify-club
+          - link "Events" [ref=f5e33] [cursor=pointer]:
+            - /url: /slice15-verify-club/events
+          - link "Attendance" [ref=f5e36] [cursor=pointer]:
+            - /url: /slice15-verify-club/attendance
+          - link "Certificates" [ref=f5e43] [cursor=pointer]:
+            - /url: /slice15-verify-club/certificates
+          - link "Feedback" [ref=f5e47] [cursor=pointer]:
+            - /url: /slice15-verify-club/feedback
+          - link "Settings" [ref=f5e51] [cursor=pointer]:
+            - /url: /slice15-verify-club/settings
+        - generic [ref=f5e55]:
+          - 'button "Theme: dark" [ref=f5e56]'
+          - button "Account menu" [ref=f5e57] [cursor=pointer]
+    - generic [ref=f5e63]:
+      - banner [ref=f5e64]:
+        - navigation "Breadcrumb" [ref=f5e65]:
+          - generic [ref=f5e66]: Slice15 Verify Club
+          - generic [ref=f5e67]: /
+          - generic [ref=f5e68]: Public Page
+      - main [ref=f5e70]:
+        - heading "Public Page" [level=1] [ref=f5e72]
+        - generic [ref=f5e73]:
+          - button "Gallery" [ref=f5e74]
+          - button "Achievements" [active] [ref=f5e75]
+        - generic [ref=f5e80]:
+          - paragraph [ref=f5e81]:
+            - text: Best Club Award
+            - generic [ref=f5e82]: — 2024
+          - paragraph [ref=f5e83]: "Updated: outstanding leadership and impact."
