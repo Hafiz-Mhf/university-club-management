@@ -250,6 +250,31 @@ export interface OrgFile {
   createdAt: string;
 }
 
+export interface PublicProfile {
+  name: string;
+  description: string | null;
+  logoUrl: string | null;
+  bannerUrl: string | null;
+  primaryColor: string | null;
+  socialLinks: Record<string, string> | null;
+  advisors: string[] | null;
+  upcomingEvents: { id: string; title: string; startAt: string; endAt: string; venue: string | null }[];
+}
+
+export interface PublicGalleryPhoto {
+  id: string;
+  caption: string | null;
+  downloadUrl: string;
+  createdAt: string;
+}
+
+export interface PublicAchievement {
+  id: string;
+  title: string;
+  description: string;
+  year: number;
+}
+
 export interface Member {
   id: string;
   userId: string;
