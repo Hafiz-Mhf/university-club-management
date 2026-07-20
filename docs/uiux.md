@@ -1219,3 +1219,99 @@ added to).
 public-facing club page at `/club/[orgSlug]`, linked from Settings.
 Gallery management and Achievements management remain the next two Public
 Club Page sub-slices.
+
+## Slice 14 — Gallery Management (shipped)
+
+**Scope:** second of three Public Club Page sub-slices — full
+committee-side management (upload, list, remove) for the already-shipped
+`GalleryController`. Achievements management remains the last.
+
+### A new nav area, deliberately not a Workspace tab
+
+A fresh committee-only "Public Page" sidebar item, tabbed Gallery (built)
+/ Achievements (placeholder), rather than a fourth Workspace tab.
+Workspace's three existing tabs (Files, Minutes, Assets) are all internal
+ops tooling for the committee itself; Gallery and Achievements curate the
+content that appears on the public `/club/[orgSlug]` page from Slice
+13 — a different audience and purpose, even though the RBAC tier
+(`MANAGE_EVENTS`) is identical. No domain hue was added for the nav icon:
+the seven domain hues (events/registrations/attendance/certificates/
+feedback/analytics/ops) are all already assigned, and this codebase's own
+convention (stated directly in `nav-items.ts`'s comment) is not to extend
+that set per-page — Public Page stays neutral, same as Members/Settings.
+
+### No auth-leak-guard needed — a first among resolver-adjacent features
+
+Every prior list-with-identity feature (Files' uploader, Assets' creator,
+Minutes' attendees) needed the `members.isError ? 'Committee member' :
+resolveXName(...)` guard because the list response included a raw
+user/membership id that had to be cross-referenced against the
+`VIEW_MEMBERS`-gated members list. `GalleryService.list()` returns
+`{id, caption, downloadUrl, createdAt}` only — confirmed by reading the
+backend source at design time — so there was never an identity field to
+resolve or leak in the first place. `GalleryGrid` needs no `useMembers`
+call at all.
+
+### Nav-gated, not route-gated — Workspace's pattern reused directly
+
+The "Public Page" nav link is committee-only, but the page itself doesn't
+redirect a non-committee visitor navigating there directly — it renders
+the Gallery grid read-only (no upload form, no Remove buttons), exactly
+mirroring how Files/Minutes/Assets have behaved since Slice 9: nav
+visibility and backend RBAC are two separate, independently-correct
+gates, and the frontend never conflates "not linked from the sidebar"
+with "not accessible."
+
+### Inline upload, no dialog — same call as Settings' BrandingPanel
+
+`GalleryUploadForm` is a plain inline form (native file input + optional
+caption + Upload button) above the grid, not a modal — the same choice
+Slice 12's `BrandingPanel` made and for the same reason: a single simple
+upload action has no dialog-lifecycle state worth managing, and this
+sidesteps Slice 9's `UploadFileDialog` reset-bug class by construction
+rather than by careful reset logic.
+
+### Two operational detours, neither a code bug
+
+The docker compose stack had stopped again since Slice 13's session (the
+same recurring host-sleep/restart gotcha, now confirmed a third time) —
+`docker compose ps` showed no containers at the start of live
+verification, fixed with `docker compose up -d`.
+
+More notably: Playwright's pointer-based `.click()` on the sidebar's
+theme-toggle button was reliably intercepted by an invisible
+`<nextjs-portal>` element (Next.js's dev-mode overlay), even when
+targeting exact button coordinates via `page.mouse.click()` and even
+after explicitly closing the overlay's visible panel. Four consecutive
+pointer-based attempts failed — past this project's own "3+ failed
+fixes" threshold for stopping and reconsidering rather than trying a
+fifth variation of the same approach. Keyboard activation
+(`.focus()` + `Enter`) bypasses pointer hit-testing entirely and worked
+on the first attempt. The underlying theme mechanism itself (a Zustand
+`persist` store, unmodified since Slice 1) was never in question — it had
+already been proven working with a real click in Slice 12's own live
+verification using this identical button.
+
+### Test baseline
+
+Frontend 149/149 (4 new: `validateGalleryImage`'s valid-PNG/valid-JPEG/
+rejected-MIME/oversized cases, mirroring `validateBrandingImage`'s exact
+shape). Live verification: uploaded a real photo with a caption
+(appeared immediately in the grid); an unsupported file type was
+rejected client-side with the network log confirming zero requests for
+that attempt (only one real `POST /gallery` fired, for the valid
+upload); removed a photo with confirm; confirmed the Achievements
+placeholder text; confirmed a fresh PARTICIPANT test account (the
+original Slice 12 one had been genuinely deleted during that slice's own
+live verification of account deletion) sees no "Public Page" nav link
+but gets read-only access via direct URL; confirmed a freshly-uploaded
+photo actually appeared on the real `/club/[orgSlug]` page from Slice
+13, closing the loop between the two sub-slices; both themes
+screenshotted clean once the theme-toggle interaction issue above was
+worked around. Zero code bugs. Backend untouched: 101 unit / 327 e2e
+(Slice 13's baseline, unchanged).
+
+**What's real after Slice 14:** everything from Slices 1–13, plus full
+Gallery management under a new "Public Page" nav area — upload, view,
+and remove, correctly RBAC-gated. Achievements management remains the
+last Public Club Page sub-slice.

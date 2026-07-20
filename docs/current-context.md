@@ -1083,28 +1083,107 @@ remain the next two Public Club Page sub-slices — until they ship, the
 public page's gallery/achievements sections stay empty for any org whose
 data wasn't seeded directly via the API.
 
+### Frontend Slice 14 — Gallery Management (shipped, `feature/frontend-slice14-gallery-management`)
+
+Spec: `docs/superpowers/specs/2026-07-20-frontend-slice14-gallery-management-design.md`.
+Plan: `docs/superpowers/plans/2026-07-20-frontend-slice14-gallery-management.md`.
+
+**Scope:** second of three Public Club Page sub-slices — full committee-
+side management UI for the already-shipped `GalleryController` (upload,
+list, remove). No new backend endpoints.
+
+**A new nav area, not a Workspace tab:** a fresh committee-only "Public
+Page" sidebar item (`minTier: 'committee'`, neutral icon — no domain hue,
+since all seven are already assigned and the codebase's own convention is
+not to extend that set per-page), tabbed Gallery (built) / Achievements
+(placeholder, "Coming in a later sub-slice"). Deliberately not folded into
+Workspace: Workspace's three tabs (Files, Minutes, Assets) are internal
+ops tooling, while Gallery/Achievements curate the content that becomes
+the public `/club/[orgSlug]` page from Slice 13 — a different kind of
+content, worth its own home.
+
+5 code tasks, one commit each: gallery data layer (`3f50da0`), gallery
+image validation (`a71f19c`), `GalleryUploadForm` (`1eaaca3`),
+`GalleryGrid` with remove confirm (`cbdaab1`), Public Page nav item +
+Gallery tab wiring (`3435376`); Task 6 (live verification) found **zero
+code bugs**.
+
+**No auth-leak-guard needed, a first for a resolver-adjacent feature:**
+every prior name-resolution risk (Files/Assets/Minutes) existed because
+the list endpoint's response included an uploader/creator id that had to
+be matched against the `VIEW_MEMBERS`-gated members list. `GalleryService.list()`
+returns `{id, caption, downloadUrl, createdAt}` only — no uploader
+identity field at all — confirmed by reading the backend source during
+brainstorming, so there was never a resolver to guard in the first place.
+
+**Nav-gated, not route-gated — the Workspace pattern reused directly:**
+the "Public Page" nav link only shows for committee, but the page itself
+doesn't redirect a non-committee visitor who navigates to it directly —
+it renders the grid read-only (no upload form, no Remove buttons),
+matching exactly how Workspace's Files/Minutes/Assets tabs have always
+behaved (nav visibility and backend RBAC are two separate, correctly-
+independent gates).
+
+**An operational detour, not a code bug:** the docker compose stack had
+stopped since Slice 13's session (same recurring host-sleep/restart
+gotcha already on file) — `docker compose ps` showed no containers at
+the start of live verification. Fixed with `docker compose up -d`,
+confirmed via a real DB-touching request before proceeding.
+
+**A second operational detour during the dark-theme screenshot check:**
+Playwright's pointer-based `.click()` on the sidebar's theme-toggle button
+was reliably intercepted by an invisible `<nextjs-portal>` hit-region
+(Next.js's dev-mode overlay), even after closing its visible panel and
+even when clicking the exact button coordinates via `page.mouse.click()`.
+Root-caused rather than forced through repeatedly (4 failed pointer-based
+attempts, past this project's own "3+ fixes failed" threshold to stop and
+rethink): keyboard activation (`.focus()` + `Enter`) bypasses pointer
+hit-testing entirely and worked immediately. Confirmed this is a
+dev-tooling artifact specific to this automated session, not an app
+defect — the underlying theme mechanism (Zustand `persist` store) is
+unmodified Slice-1 code, already proven working in Slice 12's live
+verification using the same button.
+
+**Test baseline:** frontend 149/149 (4 new — `validateGalleryImage`'s
+cases, mirroring `validateBrandingImage`'s exact shape). Live
+verification: uploaded a real photo with a caption (appeared
+immediately); attempted an unsupported file type (client-side rejection
+confirmed, zero network calls — verified directly via the network log,
+only one `POST /gallery` fired, for the valid upload); removed a photo
+with confirm; confirmed the Achievements placeholder; confirmed a
+PARTICIPANT account (a fresh one — the original Slice 12 participant test
+account no longer exists, having been genuinely deleted during Slice 12's
+own live verification) sees no "Public Page" nav link but gets read-only
+access via direct URL; confirmed a freshly-uploaded photo actually
+appeared on the real `/club/[orgSlug]` public page from Slice 13, closing
+the loop between the two sub-slices; both themes screenshotted clean.
+Backend untouched: 101 unit / 327 e2e (Slice 13's baseline, unchanged).
+
+**What's real after Slice 14:** everything from Slices 1–13, plus full
+Gallery management under a new "Public Page" nav area. Achievements
+management remains the last Public Club Page sub-slice.
+
 ---
 
 ## Next step
 
-Frontend Slice 13 (Public Club Page) merged to `main` — docs-synced,
+Frontend Slice 14 (Gallery Management) merged to `main` — docs-synced,
 tests green, branch deleted (see finish-branch below for confirmation
 this actually happened by the time you're reading this).
 
-**Two of three Public Club Page sub-slices remain:** Gallery management
-and Achievements management (both committee-side CRUD UI, in-app, same
-`MANAGE_EVENTS` RBAC tier, no new backend endpoints needed). Ask/confirm
-which next before starting its brainstorm — same one-at-a-time discipline
-as every prior sub-slice split (Workspace, this one).
+**One Public Club Page sub-slice remains: Achievements management**
+(committee-side create/edit/remove UI for the already-shipped
+`AchievementsController`, same `MANAGE_EVENTS` RBAC tier, no new backend
+endpoints, same "Public Page" nav area as its second tab — the Gallery
+tab already established the shape). Ask/confirm before starting its
+brainstorm.
 
 Backend Phase 2 remains fully shipped (11/11 items, see above); Phase 3
 backend items are still unscoped and untouched. Slice 6 remains the only
 frontend slice to have touched a backend *feature* file for a bug fix;
-Slice 13 is the second slice to touch backend files at all, but as a
-planned, risk-free rename (zero consumers existed), not a bug fix — worth
-distinguishing from Slice 6's case when reading "backend touched" in this
-log. Slices 7 through 12 held "zero backend files"; Slice 13 breaks that
-streak deliberately, not incidentally.
+Slice 13 remains the only slice with a planned, risk-free backend rename.
+Slices 7 through 12 and 14 all held "zero backend files" — Slice 13 is
+still the sole exception.
 
 Standing preferences remain in force for whatever comes next: pause before
 Task 1, pause before the live-verification task too (added as a standing
@@ -1114,8 +1193,8 @@ writing plan task-numbering (frontend `npm test`/`npm run build` alongside
 backend `npm test`/`npm run test:e2e`). Live-driving the actual flow (dev
 server + Playwright) as the real verification step for page-level
 correctness, rather than component unit tests, remains essential — it
-caught nothing in Slices 1, 2, 4, 5, 10, 11, 12, and 13, one bug each in
-Slices 3 and 8 (field-id-vs-label mismatch; invisible sparse-line dots),
+caught nothing in Slices 1, 2, 4, 5, 10, 11, 12, 13, and 14, one bug each
+in Slices 3 and 8 (field-id-vs-label mismatch; invisible sparse-line dots),
 one *unrelated*-but-flagged bug in Slice 7 (account-menu crash, fixed
 separately), **two** in Slice 6 (one frontend, one backend), and **two**
 in Slice 9 (Cancel-button state leak, uploader-UUID authorization leak) —
@@ -1165,6 +1244,17 @@ bug (a mangled em dash) is worth root-causing at the byte level
 terminal's rendering of it — the same "confirm before believing a visual
 impression" lesson from Slice 8's screenshot-compression false alarm,
 here applied to a different tool's rendering instead of a screenshot's.
+Slice 14 adds a third operational-gotcha instance and one new debugging
+lesson: the docker-compose-stopped gotcha recurred a third time (confirm
+via `docker compose ps` at the start of every live-verification pass, not
+just after a known host restart); and Playwright's pointer-based `.click()`
+can be reliably blocked by Next.js's dev-mode `<nextjs-portal>` overlay
+even when clicking exact coordinates via `page.mouse.click()` — after 3+
+failed pointer-based attempts (this project's own threshold to stop
+forcing a fix and reconsider), keyboard activation (`.focus()` +
+`Enter`) bypassed the hit-testing entirely and is now the fallback to
+reach for when a real, unmodified UI element won't respond to clicks in
+an automated dev-mode session specifically.
 
 This doc itself (`docs/current-context.md`) has been tracked and committed
 alongside every docs-sync since Slice 9 — the earlier note claiming it was
