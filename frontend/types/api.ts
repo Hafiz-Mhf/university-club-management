@@ -268,6 +268,13 @@ export interface PublicGalleryPhoto {
   createdAt: string;
 }
 
+export interface GalleryPhoto {
+  id: string;
+  caption: string | null;
+  downloadUrl: string;
+  createdAt: string;
+}
+
 export interface PublicAchievement {
   id: string;
   title: string;
