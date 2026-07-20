@@ -1015,31 +1015,96 @@ Settings — organization profile/branding/color management with two RBAC
 tiers, and My Account PDPA actions available to every member. **No
 placeholder routes remain in the frontend.**
 
+### Frontend Slice 13 — Public Club Page (shipped, `feature/frontend-slice13-public-club-page`)
+
+Spec: `docs/superpowers/specs/2026-07-20-frontend-slice13-public-club-page-design.md`.
+Plan: `docs/superpowers/plans/2026-07-20-frontend-slice13-public-club-page.md`.
+
+**Scope:** first of three Public Club Page sub-slices (mirrors the
+Workspace split — Gallery management and Achievements management remain
+the next two). Ships the public-facing surface only: a new unauthenticated
+`/club/[orgSlug]` route showing org profile (banner/logo/description/
+social links/advisors), upcoming `PUBLISHED` events, a gallery grid, and
+an achievements list. Backend `gallery`/`achievements`/`public` modules
+were already fully shipped in Phase 2 with zero frontend until now.
+
+**A real backend change, found and scoped during brainstorming, not
+live:** `PublicController`'s three routes were keyed on `:orgId` (a UUID)
+with no public slug→id lookup anywhere — a public page meant to be shared
+would otherwise need ugly `/club/<uuid>` URLs. Since no consumer existed
+yet (zero frontend, zero risk), the route param was renamed to `:orgSlug`
+and `PublicService` now resolves via `Organization.slug` (`@unique`)
+instead of `id`. Both existing e2e specs
+(`public-profile.e2e-spec.ts`, `public-gallery-achievements.e2e-spec.ts`)
+were updated in place — same 7 tests, now slug-keyed, no test added or
+removed.
+
+7 code tasks, one commit each: backend orgSlug rename + e2e updates
+(`cd46744`), public types + data hooks (`4d7dbe6`), profile hero +
+upcoming events (`50fd6ea`), gallery grid (`0f0ba70`), achievements list
+(`1347d70`), page wiring (`c437569`), Settings "View public page" link
+(`197a02c`); Task 8 (live verification) found **zero code bugs**.
+
+**A new checklist category, not seen in any prior slice:** this is the
+first frontend surface in the whole app that must work with **zero
+authentication at all**, not just a different role. Verified by clearing
+`localStorage` (the refresh token's only persistence layer — the access
+token lives in memory only) and reloading, then confirming the page still
+rendered all four sections, made only the three unguarded `/public/...`
+calls, and never triggered a login redirect.
+
+**One investigated false alarm, resolved by checking raw bytes, not
+guessing:** the org description's em dash appeared corrupted
+(`Testing Settings ï¿½ updated description`) when inspected via `curl` +
+Python in the terminal. Root-caused instead of dismissed: `psql` showed
+the correct character in the database, and a raw hex dump of the actual
+HTTP response bytes showed the exact correct UTF-8 encoding (`e2 80 94`).
+The corruption was the terminal/Python codepage's own rendering, not the
+API or the data — confirmed the browser (and every screenshot) always
+displayed it correctly. Same category of lesson as Slice 8's
+screenshot-compression false alarm: verify at the byte/DOM level before
+calling something a defect.
+
+**Test baseline:** frontend 145/145 (no new tests — this slice is
+presentational/read-only with no form schemas or branching logic, matching
+the plan's stated expectation). Live verification: Settings' "View public
+page"/"Copy link" confirmed working; the real page loaded fully logged
+out with real seeded gallery photos, achievements (sorted year desc), and
+upcoming events (confirmed a seeded `DRAFT` event was correctly excluded,
+only the `PUBLISHED` one appeared); unknown-slug state rendered "Club not
+found" cleanly with no crash or redirect loop; both themes screenshotted
+clean. Backend: 101 unit / 327 e2e (same totals as Slice 12's baseline —
+7 public e2e tests modified in place, not added).
+
+**What's real after Slice 13:** everything from Slices 1–12, plus a real
+public-facing club page at `/club/[orgSlug]`, discoverable from Settings.
+Gallery management and Achievements management (committee-side CRUD UI)
+remain the next two Public Club Page sub-slices — until they ship, the
+public page's gallery/achievements sections stay empty for any org whose
+data wasn't seeded directly via the API.
+
 ---
 
 ## Next step
 
-Frontend Slice 12 (Settings) merged to `main` — docs-synced, tests green,
-branch deleted (see finish-branch below for confirmation this actually
-happened by the time you're reading this).
+Frontend Slice 13 (Public Club Page) merged to `main` — docs-synced,
+tests green, branch deleted (see finish-branch below for confirmation
+this actually happened by the time you're reading this).
 
-**All twelve frontend slices are shipped. No placeholder routes remain.**
-The only frontend surface with zero UI at all is the Public Club Page
-(backend `gallery`/`achievements`/`public` modules, shipped in Phase 2) —
-it's an unauthenticated route with no sidebar nav entry, so it was never a
-"placeholder" in the nav-item sense these slices tracked, but it has no
-frontend either. Next frontend work, if any, would need to be scoped as a
-fresh brainstorm (its own spec) rather than picked from an existing
-placeholder list. Otherwise, Phase 3 backend items remain the other
-unscoped option — ask/confirm before starting either.
+**Two of three Public Club Page sub-slices remain:** Gallery management
+and Achievements management (both committee-side CRUD UI, in-app, same
+`MANAGE_EVENTS` RBAC tier, no new backend endpoints needed). Ask/confirm
+which next before starting its brainstorm — same one-at-a-time discipline
+as every prior sub-slice split (Workspace, this one).
 
 Backend Phase 2 remains fully shipped (11/11 items, see above); Phase 3
 backend items are still unscoped and untouched. Slice 6 remains the only
-frontend slice to have touched a backend *feature* file (one real bug fix,
-`certificates.service.ts` + its e2e test); Slice 12 touched one backend-
-adjacent-but-not-feature file only in the sense that it fixed a pre-existing
-frontend test-typing gap, not backend code — Slices 7 through 12 all held
-"zero backend files."
+frontend slice to have touched a backend *feature* file for a bug fix;
+Slice 13 is the second slice to touch backend files at all, but as a
+planned, risk-free rename (zero consumers existed), not a bug fix — worth
+distinguishing from Slice 6's case when reading "backend touched" in this
+log. Slices 7 through 12 held "zero backend files"; Slice 13 breaks that
+streak deliberately, not incidentally.
 
 Standing preferences remain in force for whatever comes next: pause before
 Task 1, pause before the live-verification task too (added as a standing
@@ -1049,7 +1114,7 @@ writing plan task-numbering (frontend `npm test`/`npm run build` alongside
 backend `npm test`/`npm run test:e2e`). Live-driving the actual flow (dev
 server + Playwright) as the real verification step for page-level
 correctness, rather than component unit tests, remains essential — it
-caught nothing in Slices 1, 2, 4, 5, 10, 11, and 12, one bug each in
+caught nothing in Slices 1, 2, 4, 5, 10, 11, 12, and 13, one bug each in
 Slices 3 and 8 (field-id-vs-label mismatch; invisible sparse-line dots),
 one *unrelated*-but-flagged bug in Slice 7 (account-menu crash, fixed
 separately), **two** in Slice 6 (one frontend, one backend), and **two**
@@ -1089,7 +1154,17 @@ branches (here, `DELETE /me`'s 409-guard vs. success path), drive **both**
 branches with separate test accounts rather than stopping once one path is
 proven — the success path (real anonymization, real redirect) was the one
 more likely to hide a bug, and would have gone unverified if the 409 case
-alone had been treated as sufficient.
+alone had been treated as sufficient. Slice 13 adds two more: first, a
+live-verification checklist can gain a genuinely new category, not just
+new instances of existing ones — "does this work with zero authentication
+at all" only became a real question once a truly public route existed,
+and clearing `localStorage` + confirming no auth-guarded network calls is
+now the template for verifying it. Second, an apparent data-corruption
+bug (a mangled em dash) is worth root-causing at the byte level
+(`psql` + a hex dump of the raw HTTP response) before trusting a
+terminal's rendering of it — the same "confirm before believing a visual
+impression" lesson from Slice 8's screenshot-compression false alarm,
+here applied to a different tool's rendering instead of a screenshot's.
 
 This doc itself (`docs/current-context.md`) has been tracked and committed
 alongside every docs-sync since Slice 9 — the earlier note claiming it was

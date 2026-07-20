@@ -1119,3 +1119,103 @@ Settings — organization profile/branding/color management across three
 RBAC tiers, and My Account PDPA actions (consent history, data export,
 account deletion) available to every member regardless of role. **No
 placeholder routes remain anywhere in the frontend.**
+
+## Slice 13 — Public Club Page (shipped)
+
+**Scope:** first of three Public Club Page sub-slices — a new
+unauthenticated `/club/[orgSlug]` route (org profile, upcoming events,
+gallery grid, achievements list). Gallery management and Achievements
+management (committee-side CRUD) remain the next two, same decomposition
+shape as the Workspace split.
+
+### The first route in this app with zero auth requirement
+
+Every prior route lives inside `(app)`, gated by `AppLayout`'s session
+check, or is the login/register/consent flow itself (which still expects
+*some* credential exchange). `/club/[orgSlug]` is genuinely public: no
+`OrgProvider`, no sidebar/topbar, no `AppLayout` guard — it's a sibling
+top-level segment under `app/`, not nested inside `(app)` at all. No
+dedicated `layout.tsx` was added for it either; the root `app/layout.tsx`
+(fonts, theme-init script, `QueryProvider`, `globals.css`) already covers
+every route including this one, so an empty pass-through layout file
+would have added nothing.
+
+This also makes it this app's first frontend surface where the
+live-verification checklist needed a genuinely new check, not just a new
+instance of an existing one: **does this work with zero authentication at
+all**, verified by clearing `localStorage` (the refresh token's only
+persistence layer) and confirming the page still renders and only ever
+calls the three unguarded `/public/organizations/:orgSlug/*` endpoints —
+no auth header, no 401, no login redirect.
+
+### A real, risk-free backend change made during brainstorming
+
+`PublicController`'s three routes were keyed on `:orgId` (a UUID) with no
+public slug-to-id lookup anywhere in the backend — a public page meant to
+be shared and remembered would otherwise ship as `/club/<uuid>`. Since
+nothing consumed these routes yet (zero frontend existed), the param was
+renamed to `:orgSlug` and `PublicService.requireOrganizationBySlug`
+resolves via `Organization.slug` (already `@unique`) instead of `id`. Both
+existing e2e specs were updated in place, keeping the same 7 tests
+slug-keyed rather than id-keyed — no test added, none removed. This is
+the second time a frontend slice has touched backend code (after Slice
+6's bug fix), but a different category: a planned, zero-risk rename
+decided at design time, not a defect found live.
+
+### Free-form data, same rendering choice as Settings
+
+`socialLinks`/`advisors` are rendered here exactly as Slice 12's editor
+assumed them — a free-form `Record<string,string>` (rendered as a row of
+labeled links keyed by whatever platform name the committee typed) and a
+plain `string[]` (rendered as a bulleted list) — no fixed platform set or
+advisor-title field invented on either the write or read side.
+
+### Raw `<img>`, not `next/image`
+
+`next/image`'s `<Image>` component has never appeared anywhere in this
+codebase — every image (QR codes, certificates, branding previews,
+gallery thumbnails) uses a plain `<img>` with an
+`eslint-disable-next-line @next/next/no-img-element` comment. The hero
+banner/logo and gallery grid follow the same pattern rather than
+introducing `<Image>` for the first time, partly for consistency and
+partly because Next 16 ("not the Next.js you know" per this repo's own
+`AGENTS.md`) makes any first use of an unverified API a real risk to
+front-load into a slice that doesn't need it — these are already-signed,
+5-minute-expiring MinIO URLs that gain nothing from Next's image
+optimizer regardless.
+
+### An investigated false alarm: an em dash that looked corrupted
+
+During live verification, `curl`-ing the public profile endpoint and
+inspecting it with a quick Python one-liner showed the org description's
+em dash as a replacement character. Rather than assume a real encoding
+bug, this was root-caused: `psql` showed the correct character stored in
+Postgres, and a raw hex dump of the actual HTTP response bytes showed the
+exact correct UTF-8 sequence (`e2 80 94`) — the corruption existed only in
+how the terminal/Python pipeline rendered it, never in the data or the
+API. The browser (confirmed via every screenshot) always displayed it
+correctly. Same category of lesson as Slice 8's screenshot-compression
+false alarm — confirm at the byte or DOM level before calling something a
+defect, regardless of which tool is doing the misleading rendering.
+
+### Test baseline
+
+Frontend 145/145 (no new tests — this slice is presentational/read-only
+with no form schemas or branching logic to unit-test, matching the plan's
+expectation going in). Live verification: seeded real gallery photos,
+two achievements, one `PUBLISHED` and one `DRAFT` event via the API
+directly; confirmed the public page rendered banner/logo/name/description/
+social-links/advisors, the `PUBLISHED` event only (the `DRAFT` one never
+appeared), both gallery photos linking to their real signed URLs, and
+both achievements sorted year descending; confirmed fully logged out (see
+above); confirmed the unknown-slug path renders "Club not found" with no
+crash or redirect loop; confirmed Settings' new "View public page"/"Copy
+link" additions work and open/copy the correct URL; both themes
+screenshotted clean. Backend: 101 unit / 327 e2e (same totals as Slice
+12's baseline — the two public e2e spec files were modified in place, not
+added to).
+
+**What's real after Slice 13:** everything from Slices 1–12, plus a real
+public-facing club page at `/club/[orgSlug]`, linked from Settings.
+Gallery management and Achievements management remain the next two Public
+Club Page sub-slices.
