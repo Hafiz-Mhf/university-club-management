@@ -282,6 +282,16 @@ export interface PublicAchievement {
   year: number;
 }
 
+export interface Achievement {
+  id: string;
+  title: string;
+  description: string;
+  year: number;
+  createdByUserId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Member {
   id: string;
   userId: string;
