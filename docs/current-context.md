@@ -872,23 +872,88 @@ Workspace Assets tab — add/edit via modal, condition tracking with
 semantic-colored badges, remove, correct RBAC. Meeting Minutes remains the
 last Workspace sub-slice.
 
+### Frontend Slice 11 — Workspace: Meeting Minutes (shipped, `feature/frontend-slice11-workspace-minutes`)
+
+Spec: `docs/superpowers/specs/2026-07-19-frontend-slice11-workspace-minutes-design.md`.
+Plan: `docs/superpowers/plans/2026-07-19-frontend-slice11-workspace-minutes.md`.
+Full architecture as built: `docs/uiux.md` (Slice 11 section).
+
+**Scope:** third and last Workspace sub-slice — completes the split first
+made in Slice 9's spec. Full frontend surface for the already-shipped
+`MinutesController`: create, paginated list, read-only detail, edit,
+remove. Unlike Files/Assets, needed dedicated routes
+(`/workspace/minutes/new`, `/[id]`, `/[id]/edit`) mirroring Events' route
+shape one level deeper — the agenda/action-item arrays need real editing
+space a modal can't hold. No new backend endpoints.
+
+9 code tasks, one commit each: data layer (`74440b0`), form schema
+(`1251c06`), attendee-name resolution (`3d91d54`), `MinutesForm`
+(`b13e4d7`), `MinutesList` (`cfc490e`), page wiring (`5e09391`), new-minutes
+page (`406845e`), minutes detail page (`01329cb`), edit-minutes page
+(`ab3b595`); Task 10 (live verification) found **zero code bugs** — the
+one real problem hit was an environment/cache issue, not the shipped code
+(see below).
+
+**Two firsts for this frontend:** `useMinutesList`/`MinutesList` are the
+first genuinely paginated list (`{data, total, page, pageSize}` from the
+backend, Prev/Next + "Page X of Y", no library) and `useMinutes(orgId,
+minutesId)` is the first single-item fetch calling `GET /:id` directly —
+every prior detail page (Members, Certificates) instead filtered an
+already-fetched *unpaginated* list, which pagination breaks.
+
+**A third occurrence of the Files/Assets authorization-leak class, again
+designed in from the start:** `GET /members` is `VIEW_MEMBERS`-gated
+(committee-only) but the minutes detail page is visible to any org
+member. `resolveAttendeeNames` (matching by `Membership.id`, a new
+resolver shape — every prior resolver keys by `userId`) stays a pure
+mapper; the `members.isError → 'Committee member'` guard lives at the
+detail-page call site, same placement as Slice 9/10's fixes. Live
+verification confirmed a participant saw "Committee member, Committee
+member," never raw membership ids.
+
+**Operational gotcha (not a code bug), logged for next time:** the docker
+stack and dev servers had stopped between Slice 10's merge and this
+slice's live verification (host sleep/restart). Restarting them produced a
+genuine 404 on every `/workspace/minutes/*` route — looking exactly like a
+routing bug. Root cause: a `taskkill` targeted the wrong PIDs, so two
+frontend dev-server processes ended up racing over the same `.next`
+persistent cache, corrupting Turbopack's route manifest. Killing every
+process actually bound to the ports in use, clearing `.next`, and starting
+one clean instance fixed it immediately — no code touched, confirmed by
+the same route returning `200` right after. Worth checking for a
+stale/racing dev-server cache before assuming a post-restart 404 is a real
+routing regression.
+
+**Test baseline:** frontend 126/126 (9 new — `minutesFormSchema`'s 6
+cases, `resolveAttendeeNames`'s 3 cases). Live verification: full
+create→view→edit→remove cycle with attendees/agenda/action items;
+pagination confirmed across 2 pages (12 seeded rows); non-committee gating
+confirmed on list, detail, and both direct-navigation redirects; both
+themes clean. Backend untouched: 101 unit / 327 e2e (Slice 10's baseline,
+unchanged).
+
+**What's real after Slice 11:** everything from Slices 1–10, plus the
+complete Workspace surface — Files, Assets, and Meeting Minutes. All three
+Workspace sub-slices are shipped; Settings is the only remaining unscoped
+placeholder in the entire frontend.
+
 ---
 
 ## Next step
 
-Frontend Slice 10 (Workspace — Asset Management) merged to `main` —
+Frontend Slice 11 (Workspace — Meeting Minutes) merged to `main` —
 docs-synced, tests green, branch deleted (see finish-branch below for
 confirmation this actually happened by the time you're reading this).
 
-**No frontend slice 11 has been picked yet.** Meeting Minutes (the last
-Workspace sub-slice) and Settings are the only unscoped work left.
-Ask/confirm before starting the next brainstorm.
+**No frontend slice 12 has been picked yet.** Settings is the only
+remaining unscoped placeholder in the whole frontend. Ask/confirm before
+starting the next brainstorm.
 
 Backend Phase 2 remains fully shipped (11/11 items, see above); Phase 3
 backend items are still unscoped and untouched — the user's focus remains on
 the frontend. Slice 6 remains the only frontend slice to have touched a
 backend file (one real bug fix, `certificates.service.ts` + its e2e test);
-Slices 7, 8, 9, and 10 all held "zero backend files."
+Slices 7 through 11 all held "zero backend files."
 
 Standing preferences remain in force for whatever comes next: pause before
 Task 1, pause before the live-verification task too (added as a standing
@@ -898,8 +963,8 @@ writing plan task-numbering (frontend `npm test`/`npm run build` alongside
 backend `npm test`/`npm run test:e2e`). Live-driving the actual flow (dev
 server + Playwright) as the real verification step for page-level
 correctness, rather than component unit tests, remains essential — it
-caught nothing in Slices 1, 2, 4, 5, and 10, one bug each in Slices 3 and 8
-(field-id-vs-label mismatch; invisible sparse-line dots), one
+caught nothing in Slices 1, 2, 4, 5, 10, and 11, one bug each in Slices 3
+and 8 (field-id-vs-label mismatch; invisible sparse-line dots), one
 *unrelated*-but-flagged bug in Slice 7 (account-menu crash, fixed
 separately), **two** in Slice 6 (one frontend, one backend), and **two**
 in Slice 9 (Cancel-button state leak, uploader-UUID authorization leak) —
@@ -913,15 +978,20 @@ catch different failure classes. Slice 8 adds one more: a "looks broken"
 observation during live verification (empty-looking bar charts) can be a
 screenshot-compression artifact, not a real bug — confirm via DOM/computed-
 style inspection before treating a visual impression as a defect. Slice 9
-established a pattern that Slice 10 then *proved out in practice*: when a
-future feature resolves names/labels by joining against another endpoint's
-data, check whether that other endpoint's RBAC tier is a subset of the
-current feature's visibility — and if a slice's own predecessor hit a bug
-class (stale dialog state, an authorization-vs-not-found conflation), check
-whether the *new* slice's design has the same shape of risk *before*
-writing code, not just during live verification. Slice 10 is the first
-case in this project where that design-time check actually paid off —
-zero bugs found live, both risks addressed on paper first.
+established a pattern that Slices 10 *and* 11 then proved out twice in a
+row: when a future feature resolves names/labels by joining against
+another endpoint's data, check whether that other endpoint's RBAC tier is
+a subset of the current feature's visibility, and design the guard in
+before writing code — zero live bugs in either slice as a direct result.
+Slice 11 adds a second, unrelated lesson: a **second operational gotcha**
+alongside the existing docker-compose one — after any host sleep/restart,
+a dev-server restart can itself go wrong (stray PIDs surviving a kill,
+multiple processes racing over `.next`'s persistent cache) and produce a
+404 that looks exactly like a real routing regression. Root-cause this
+class of failure by checking for actually-listening ports and process
+counts before assuming new route code is broken — confirmed twice now
+(docker stack, dev-server cache) that "environment came back wrong after
+a restart" is a real and recurring category on this machine, not a one-off.
 
 This doc itself (`docs/current-context.md`) is untracked (`git status` shows
 it as `??`) — it has never been committed. Keep updating it in place; whether

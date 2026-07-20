@@ -898,3 +898,106 @@ Zero bugs found — no fix commit this task. Backend untouched: 101 unit /
 Workspace Assets tab — add/edit via modal, condition tracking with
 semantic-colored badges, remove, correct RBAC. Meeting Minutes remains the
 last Workspace sub-slice.
+
+## Slice 11 — Workspace: Meeting Minutes (shipped)
+
+Third and last Workspace sub-slice — completes the split first made in
+Slice 9's spec. Full frontend surface for the already-shipped
+`MinutesController`: create, paginated list, read-only detail, edit,
+remove. Unlike Files/Assets (tab content + dialogs), Minutes needed
+dedicated routes nested under `/workspace/minutes/` — the agenda/
+action-item arrays need real editing space a modal can't hold. Zero new
+backend endpoints.
+
+### First paginated list, first genuinely single-item fetch
+
+Every prior detail page (Members, Certificates) found its row by filtering
+an already-fetched *unpaginated* list. `MinutesController`'s list is
+paginated (`{data, total, page, pageSize}`), which breaks that shortcut —
+`useMinutes(orgId, minutesId)` is this frontend's first hook to call `GET
+/:id` directly for a single row. `MinutesList` is likewise this app's
+first list with real pagination controls (Prev/Next + "Page X of Y", no
+library, `PAGE_SIZE = 10` client-side constant).
+
+### Route shape mirrors Events one level deeper
+
+`/workspace/minutes/new`, `/workspace/minutes/[id]`,
+`/workspace/minutes/[id]/edit` — same shape as `/events`'s four-route
+family from Slice 2, and the same non-committee-redirect pattern on
+new/edit (`useEffect` + `router.replace`, matching `EventForm`'s create/
+edit pages exactly).
+
+### `attendeeMembershipIds` introduces a new resolver shape
+
+Every prior name resolver in this app (`resolveMemberName`,
+`resolveUploaderName`) keys by `userId`. `MeetingMinutes.attendeeMembershipIds`
+holds `Membership.id` values instead (confirmed by reading
+`minutes.service.ts`'s `validateAttendees`, which checks membership ids
+directly) — `resolveAttendeeNames` matches by `member.id`, the first
+resolver in this codebase to do so.
+
+### A third repeat of the Files/Assets authorization-leak class — designed in from the start, held live
+
+`GET /members` is `VIEW_MEMBERS`-gated (committee-only) but the minutes
+detail page is visible to any org member — the identical risk shape
+Slice 9's `FileList` first leaked (a raw UUID) and Slice 10's `AssetList`
+pre-empted at design time. This is the third occurrence of the same
+pattern (any-member-visible list/detail + committee-gated name-resolution
+dependency), and the spec/plan built in the guard from the start again:
+`members.isError ? m.attendeeMembershipIds.map(() => 'Committee member') :
+resolveAttendeeNames(...)` at the detail-page call site (not inside the
+resolver itself — the resolver stays a pure mapper, matching where
+Slice 9/10 applied their guards). Live verification confirmed a
+participant account saw "Committee member, Committee member," never raw
+membership ids.
+
+### `MinutesForm`'s attendee checklist is this app's second use of `Controller`
+
+A plain `string[]` field bound to a checkbox group doesn't fit React Hook
+Form's `register()` cleanly, so the attendee checklist uses `Controller`
+(first used for Slice 7's `RatingScale`) to toggle membership ids in and
+out of the array manually. Agenda items and action items each use
+`useFieldArray`, mirroring Slice 3's `RegistrationFormEditor` — add/remove
+rows, per-row validation errors.
+
+### Operational gotcha, not a code bug: a stale Turbopack cache produced a real-looking 404
+
+Between Slice 10's merge and this slice's live verification, the docker
+compose stack and both dev servers had stopped (host sleep/restart,
+consistent with the gotcha already on file for this project). Restarting
+the dev servers alone produced a **genuine 404 on every `/workspace/minutes/*`
+route**, including the dynamic `[minutesId]` detail route — looking exactly
+like a routing bug in the new code. Root-caused instead of guessed at: two
+frontend dev-server processes ended up racing over the same `.next`
+persistent cache (a `taskkill` targeted the wrong PIDs, so the original
+process survived and a second one bound to a fallback port), corrupting
+Turbopack's route manifest. Killing every process actually bound to
+`3000`/`3002`, clearing `.next`, and starting one single clean instance
+fixed it immediately — confirmed by the exact same dynamic route
+returning `200` on the next request, no code touched. Logged here so a
+future "routes 404 right after a restart" moment isn't re-diagnosed as a
+code regression before checking for a stale/racing dev-server cache
+first.
+
+### Test baseline
+
+Frontend 126/126 (9 new: `minutesFormSchema`'s 6 cases,
+`resolveAttendeeNames`'s 3 cases). Live verification: created minutes
+with 2 attendees/2 agenda items/1 action item, detail page rendered
+everything correctly; edited (removed an agenda item, removed and
+re-added an action item, confirmed persistence); removed with confirm;
+seeded 12 additional rows via the API and confirmed pagination
+(Previous/Next, correct disabling at both bounds, "Page X of Y");
+non-committee account saw the list/detail with no New/Edit/Remove, direct
+navigation to `/new` and `/edit` both redirected rather than showing a
+dead-end form, and the attendee-authorization guard held (see above);
+both themes screenshotted clean. Zero code bugs — the one real problem
+encountered (see the operational-gotcha note above) traced to a stale dev
+environment, not the shipped code. Backend untouched: 101 unit / 327 e2e
+(Slice 10's baseline, unchanged).
+
+**What's real after Slice 11:** everything from Slices 1–10, plus the
+complete Workspace surface — Files, Assets, and now Meeting Minutes
+(create, paginated browse, read-only detail, edit, remove). All three
+Workspace sub-slices are shipped; Settings is the only remaining unscoped
+placeholder in the entire frontend.
