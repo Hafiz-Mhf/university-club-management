@@ -4,6 +4,7 @@ import { OrganizationProfileForm } from '@/components/orgs/organization-profile-
 import { BrandingPanel } from '@/components/orgs/branding-panel';
 import { OrgColorForm } from '@/components/orgs/org-color-form';
 import { PublicPageLink } from '@/components/orgs/public-page-link';
+import { HandoverPackButton } from '@/components/orgs/handover-pack-button';
 import { useOrgDetail } from '@/features/orgs/use-orgs';
 import { canManageOrgColors, canManageOrgProfile } from '@/features/orgs/roles';
 import type { MembershipRole } from '@/types/api';
@@ -33,6 +34,13 @@ export function OrganizationTab({ orgId, role }: { orgId: string; role: Membersh
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-medium">Public page</h2>
         <PublicPageLink slug={org.data.slug} />
+      </section>
+      <section className="flex flex-col gap-3">
+        <h2 className="text-lg font-medium">Handover pack</h2>
+        <p className="text-sm text-foreground-muted">
+          A PDF export of your committee roster, recent meeting minutes, asset inventory, key files, and upcoming events — for committee rotation.
+        </p>
+        <HandoverPackButton orgId={orgId} orgSlug={org.data.slug} />
       </section>
     </div>
   );
