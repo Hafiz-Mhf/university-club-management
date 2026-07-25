@@ -171,3 +171,25 @@ export async function apiUpload<T = unknown>(path: string, formData: FormData): 
 
   return body as T;
 }
+
+/**
+ * For routes that stream binary bodies (e.g. the handover pack PDF) rather
+ * than JSON. Shares `request()` — same auth header and 401→refresh→retry
+ * cycle — but returns the raw Blob. Error responses are still JSON, so the
+ * failure path parses them exactly like `api()` does.
+ */
+export async function apiDownloadBlob(path: string): Promise<Blob> {
+  const res = await request(path, {}, false);
+
+  if (!res.ok) {
+    const body = await parseBody(res);
+    const message = messageOf(body, res.statusText);
+    if (res.status === 403 && message === CONSENT_STALE_MESSAGE) {
+      useAuthStore.getState().setConsentStale(true);
+      onConsentStale?.();
+    }
+    throw new ApiError(res.status, message);
+  }
+
+  return res.blob();
+}

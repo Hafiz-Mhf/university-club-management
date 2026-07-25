@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
-import { api, apiUpload, ApiError, setOnAuthFailure, setOnConsentStale } from '@/lib/api';
+import { api, apiUpload, apiDownloadBlob, ApiError, setOnAuthFailure, setOnConsentStale } from '@/lib/api';
 import { useAuthStore } from '@/features/auth/auth-store';
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -249,5 +249,67 @@ describe('apiUpload', () => {
     expect(err).toBeInstanceOf(ApiError);
     expect(err.status).toBe(409);
     expect(err.message).toBe('A certificate already exists for this person and event');
+  });
+});
+
+describe('apiDownloadBlob', () => {
+  let fetchMock: Mock;
+
+  beforeEach(() => {
+    localStorage.clear();
+    useAuthStore.getState().clearSession();
+    fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    setOnAuthFailure(null);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('returns the response body as a Blob on success', async () => {
+    useAuthStore.getState().setSession({ accessToken: 'tok', refreshToken: 'ref', consentStale: false });
+    fetchMock.mockResolvedValueOnce(
+      new Response(new Blob(['%PDF-1.4 fake']), {
+        status: 200,
+        headers: { 'Content-Type': 'application/pdf' },
+      }),
+    );
+
+    const blob = await apiDownloadBlob('/organizations/o1/handover');
+
+    expect(blob).toBeInstanceOf(Blob);
+    expect(blob.type).toBe('application/pdf');
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toBe('http://localhost:3001/organizations/o1/handover');
+    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer tok');
+  });
+
+  it('on 401: refreshes once, retries the original request, and returns the Blob', async () => {
+    useAuthStore.getState().setSession({ accessToken: 'stale', refreshToken: 'ref-1', consentStale: false });
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse(401, { message: 'Unauthorized' }))
+      .mockResolvedValueOnce(
+        jsonResponse(201, { accessToken: 'fresh', refreshToken: 'ref-2', consentStale: false }),
+      )
+      .mockResolvedValueOnce(new Response(new Blob(['%PDF-1.4 fake'], { type: 'application/pdf' }), { status: 200 }));
+
+    const blob = await apiDownloadBlob('/organizations/o1/handover');
+
+    expect(blob).toBeInstanceOf(Blob);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    const retryCall = fetchMock.mock.calls[2];
+    expect((retryCall[1].headers as Record<string, string>).Authorization).toBe('Bearer fresh');
+  });
+
+  it('a failure response parses the JSON error body and throws ApiError', async () => {
+    useAuthStore.getState().setSession({ accessToken: 'tok', refreshToken: 'ref', consentStale: false });
+    fetchMock.mockResolvedValueOnce(jsonResponse(404, { message: 'Organization not found' }));
+
+    const err = (await apiDownloadBlob('/organizations/nope/handover').catch((e) => e)) as ApiError;
+
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.status).toBe(404);
+    expect(err.message).toBe('Organization not found');
   });
 });
