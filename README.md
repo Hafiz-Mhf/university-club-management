@@ -6,12 +6,12 @@
 
 A multi-tenant platform where every university club runs its own organization — members, committee, events, attendance, certificates, analytics, public page — with **hard data isolation**, **security-first** design, and **PDPA privacy** built into every feature.
 
-[![Status](https://img.shields.io/badge/status-Phase%202%20nearly%20complete-22c55e?style=flat-square)](#-current-status)
+[![Status](https://img.shields.io/badge/status-Phase%202%20complete-22c55e?style=flat-square)](#-current-status)
 [![Frontend](https://img.shields.io/badge/frontend-Next.js%2016-000000?style=flat-square&logo=nextdotjs&logoColor=white)](https://nextjs.org)
 [![Backend](https://img.shields.io/badge/backend-NestJS%2010-e0234e?style=flat-square&logo=nestjs&logoColor=white)](https://nestjs.com)
 [![Database](https://img.shields.io/badge/db-PostgreSQL%2016-4169e1?style=flat-square&logo=postgresql&logoColor=white)](https://www.postgresql.org)
 [![ORM](https://img.shields.io/badge/orm-Prisma%205-2d3748?style=flat-square&logo=prisma&logoColor=white)](https://www.prisma.io)
-[![Tests](https://img.shields.io/badge/tests-backend%20101%20unit%20%2B%20327%20e2e%20·%20frontend%20154-blue?style=flat-square&logo=vitest&logoColor=white)](#-testing)
+[![Tests](https://img.shields.io/badge/tests-backend%20101%20unit%20%2B%20327%20e2e%20·%20frontend%20157-blue?style=flat-square&logo=vitest&logoColor=white)](#-testing)
 [![Isolation](https://img.shields.io/badge/tenant%20isolation-enforced-8b5cf6?style=flat-square&logo=shieldsdotio&logoColor=white)](#-security-architecture)
 
 </div>
@@ -154,7 +154,7 @@ Full schema → [`docs/database.md`](docs/database.md)
 
 ## 📌 Current status
 
-> **Phase 1 — Foundation Release: ✅ complete**, backend and frontend both. **Phase 2 — Organization Workspace: 🔨 nearly complete** — every item shipped except the Committee Handover Pack frontend (backend endpoint already live).
+> **Phase 1 — Foundation Release: ✅ complete**, backend and frontend both. **Phase 2 — Organization Workspace: ✅ complete**, backend and frontend both. Phase 3 is not yet scoped.
 
 ### Phase 1 — Foundation Release
 
@@ -187,14 +187,13 @@ Full schema → [`docs/database.md`](docs/database.md)
 | 9 | Certificate generator (automatic) | ✅ (background job) | — *(no UI needed, automatic)* |
 | 10 | Branding & themes | ✅ | ✅ |
 | 11 | Event feedback + NPS | ✅ | ✅ |
-| 12 | Committee handover pack | ✅ | 🔨 next up |
+| 12 | Committee handover pack | ✅ | ✅ |
 | 13 | Consent-versioned re-prompt | ✅ | ✅ |
 
 ### 🚧 In progress
 
 | Item | Status |
-|---|---|
-| 🤝 **Committee Handover Pack frontend** | 📝 Design spec in progress — last item closing out Phase 2 |
+| --- | --- |
 | 🔮 **Phase 3** | Not yet scoped |
 
 ---
@@ -208,7 +207,7 @@ Three phases. Each ships a usable product. Ordering within a phase is dependency
 The complete end-to-end participant journey with a security and privacy baseline.
 > Auth · Organizations · Committee/RBAC · Members · Events · Registration · QR Attendance · Certificates · Dashboard · Audit Logs · Basic PDPA
 
-### 🔨 Phase 2 — Organization Workspace *(nearly complete)*
+### ✅ Phase 2 — Organization Workspace *(complete)*
 
 Turns the platform from event tooling into a club's operating system.
 
@@ -221,7 +220,7 @@ Turns the platform from event tooling into a club's operating system.
 - 🏅 **Certificate generator** — automatic generation (upgrade from upload-only) ✅
 - 🎨 **Branding & themes** — full per-org theming ✅
 - 💬 **Event feedback + NPS** — feeds analytics; can gate certificate release ✅
-- 🤝 **Committee handover pack** — export org knowledge on rotation 🔨
+- 🤝 **Committee handover pack** — export org knowledge on rotation ✅
 - 🔁 **Consent-versioned re-prompt** — re-collect consent on policy change ✅
 
 ### 🔮 Phase 3 — Smart Campus Platform
@@ -315,7 +314,7 @@ npm test           # unit specs — 21 suites / 101 tests
 npm run test:e2e   # e2e specs — 66 suites / 327 tests (needs docker compose up)
 
 cd ../frontend
-npm test -- --run  # unit + component specs — 34 suites / 154 tests
+npm test -- --run  # unit + component specs — 34 suites / 157 tests
 npx tsc --noEmit   # typecheck
 npm run build      # production build
 ```

@@ -1226,6 +1226,80 @@ epic** — Public Club Page (13), Gallery Management (14), and Achievements
 Management (15) all shipped. No placeholder tabs remain anywhere in the
 app.
 
+### Frontend Slice 16 — Committee Handover Pack (shipped, `feature/frontend-slice16-committee-handover-pack`)
+
+Spec: `docs/superpowers/specs/2026-07-21-frontend-slice16-committee-handover-pack-design.md`.
+Plan: `docs/superpowers/plans/2026-07-21-frontend-slice16-committee-handover-pack.md`.
+
+**Scope:** last unshipped item on Phase 2 — Organization Workspace. A
+single "Download Handover Pack" action for the already-shipped
+`HandoverController` (`GET /organizations/:orgId/handover`), which streams
+a generated PDF (committee roster, recent meeting minutes, asset
+inventory, key files, upcoming events). No new backend endpoints.
+
+4 code tasks, one commit each: `apiDownloadBlob` client helper
+(`92c1c43`), handover data hook (`4557a3f`), `HandoverPackButton`
+(`79aece7`), Handover pack section wiring into `OrganizationTab`
+(`3185bd9`); Task 5 (live verification) found **zero code bugs** (one
+test-fixture fix, see below — not a bug in shipped code).
+
+**A genuinely new client capability:** every prior frontend download
+(Files, Certificates) went through a signed-URL indirection — the API
+returns `{ downloadUrl }` as JSON, and the frontend redirects to that URL.
+The handover endpoint streams the PDF directly from the API response with
+no signed URL involved, so `api()` (which always JSON-parses) couldn't be
+reused. Added `apiDownloadBlob(path): Promise<Blob>` to `frontend/lib/api.ts`,
+a sibling to `api()`/`apiUpload()` that shares the same internal
+`request()` helper (bearer token + 401→refresh→retry) but returns
+`res.blob()` on success and parses the JSON error body on failure exactly
+like `api()` does. `HandoverPackButton` then mirrors
+`components/account/export-data-button.tsx`'s shape almost verbatim —
+same loading/error UI, same `URL.createObjectURL` + throwaway `<a
+download>` trigger pattern, just downloading PDF bytes instead of a
+JSON blob.
+
+**No RBAC check needed inside `OrganizationTab`:** the whole "Organization"
+tab is already gated to `isCommittee` at the `SettingsPage` level, which
+matches the backend's `MANAGE_EVENTS` tier on `HandoverController` exactly
+— same reasoning already established for the Files/Minutes/Assets
+Workspace tabs.
+
+**A test-fixture bug caught before it shipped, not a code bug:** the first
+`apiDownloadBlob` unit test constructed a mock `Response` via `new
+Response(new Blob([...], { type: 'application/pdf' }), { status: 200 })`
+and asserted `blob.type === 'application/pdf'` — but Vitest/jsdom's
+`Response` doesn't propagate a `Blob`'s own `type` into the response body
+without an explicit `Content-Type` header, so the reconstructed blob came
+back as `text/plain;charset=utf-8`. Root-caused (not dismissed): fixed the
+fixture to set `headers: { 'Content-Type': 'application/pdf' }` directly,
+mirroring how the real `HandoverController` sets
+`@Header('Content-Type', 'application/pdf')`. `apiDownloadBlob`'s
+implementation was correct throughout; only the test fixture was wrong.
+
+**Test baseline:** frontend 157/157 (3 new — `apiDownloadBlob`'s success/
+401-refresh-retry/error-parsing cases, added to the existing
+`lib/__tests__/api.test.ts`). No component test for `HandoverPackButton`
+— matches `ExportDataButton`'s own precedent (untested thin wrapper around
+a mutation). Live verification: both dev servers had stopped since the
+last session (docker stack was up, but `start:dev`/`next dev` were not
+running — started both fresh); downloaded a real handover pack as
+PRESIDENT from a freshly-created org, confirmed via `pdftotext` that the
+PDF's content matched actual org data exactly (roster with correct roles,
+"None" for each empty section on a brand-new org with no minutes/assets/
+files/events yet); confirmed the button disables and shows a spinner
+while the request is in flight (checked via direct DOM inspection, since
+the request completes too fast for a manual click-then-snapshot cycle to
+catch it); confirmed a PARTICIPANT account still sees no "Organization"
+tab at all (pre-existing gating, unchanged); both themes screenshotted
+clean. Backend untouched: 101 unit / 327 e2e (Slice 15's baseline,
+unchanged).
+
+**What's real after Slice 16:** everything from Slices 1–15, plus the
+Committee Handover Pack download action. **This completes Phase 2 —
+Organization Workspace entirely, backend and frontend both.** Every item
+on `docs/roadmap.md`'s Phase 2 list is now shipped. Phase 3 remains
+unscoped.
+
 ---
 
 ## Next step
