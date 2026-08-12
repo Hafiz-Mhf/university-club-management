@@ -47,13 +47,22 @@ export class OrganizationsService {
     }
   }
 
-  async findOne(organizationId: string) {
-    const org = await this.prisma.organization.findUnique({ where: { id: organizationId } });
-    if (!org) return null;
+  /**
+   * Strips the raw storage keys and swaps them for short-lived signed URLs.
+   * Every org row that leaves the API goes through here — raw keys are never
+   * client-visible.
+   */
+  private async toClientOrg<T extends { logoKey: string | null; bannerKey: string | null }>(org: T) {
     const { logoKey, bannerKey, ...rest } = org;
     const logoUrl = logoKey ? await this.storage.getSignedDownloadUrl(logoKey, SIGNED_URL_TTL_SECONDS) : null;
     const bannerUrl = bannerKey ? await this.storage.getSignedDownloadUrl(bannerKey, SIGNED_URL_TTL_SECONDS) : null;
     return { ...rest, logoUrl, bannerUrl };
+  }
+
+  async findOne(organizationId: string) {
+    const org = await this.prisma.organization.findUnique({ where: { id: organizationId } });
+    if (!org) return null;
+    return this.toClientOrg(org);
   }
 
   private async uploadBrandingImage(
@@ -141,11 +150,13 @@ export class OrganizationsService {
     return this.deleteBrandingImage(organizationId, 'banner', actorUserId);
   }
 
-  listForUser(userId: string) {
-    return this.prisma.organization.findMany({
+  async listForUser(userId: string) {
+    const rows = await this.prisma.organization.findMany({
       where: { memberships: { some: { userId } } },
       orderBy: { name: 'asc' },
     });
+    // A user belongs to a handful of orgs, so signing per row is cheap.
+    return Promise.all(rows.map((org) => this.toClientOrg(org)));
   }
 
   async updateProfile(

@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { auditActionSentence, relativeTime } from '@/features/dashboard/format';
@@ -61,29 +62,49 @@ export function UpcomingEvents({ items }: { items: DashboardSummary['upcomingEve
   );
 }
 
-export function PendingApprovals({ items }: { items: DashboardSummary['pendingApprovals'] }) {
+/**
+ * Titled "Waitlist", not "Pending approvals": every row in it is WAITLISTED,
+ * and naming a state the product doesn't have sent people looking for an
+ * approvals queue that never existed. Rows link straight into the event's
+ * Registrations tab, where the approve action lives.
+ */
+export function PendingApprovals({
+  items,
+  orgSlug,
+}: {
+  items: DashboardSummary['pendingApprovals'];
+  orgSlug: string;
+}) {
   return (
-    <WidgetCard title="Pending approvals" count={items.length}>
-      {items.length === 0 && <EmptyLine>Nothing waiting for review</EmptyLine>}
+    <WidgetCard title="Waitlist" count={items.length}>
+      {items.length === 0 && <EmptyLine>Nobody is waiting for a seat</EmptyLine>}
       <ul className="flex flex-col divide-y divide-border">
         {items.map((r) => (
-          <li key={r.id} className="flex items-center justify-between gap-3 py-2.5">
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium">{r.eventTitle}</p>
-              <p className="text-xs text-foreground-muted">waitlisted {relativeTime(r.createdAt)}</p>
-            </div>
-            <Badge
-              variant="outline"
-              className="shrink-0 border-warning/40 bg-warning/10 text-warning"
+          <li key={r.id}>
+            <Link
+              href={`/${orgSlug}/events/${r.eventId}?tab=registrations`}
+              className="flex items-center justify-between gap-3 rounded-md py-2.5 transition-colors hover:text-primary"
             >
-              Waitlisted
-            </Badge>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium">{r.userName}</p>
+                <p className="truncate text-xs text-foreground-muted">
+                  {r.eventTitle} · waiting since {relativeTime(r.createdAt)}
+                </p>
+              </div>
+              <Badge
+                variant="outline"
+                className="shrink-0 border-warning/40 bg-warning/10 text-warning"
+              >
+                Waitlisted
+              </Badge>
+            </Link>
           </li>
         ))}
       </ul>
       {items.length > 0 && (
-        <p className="pt-2 text-xs text-foreground-subtle">
-          Approve or reject from the Events page (a later slice).
+        <p className="pt-2 text-xs text-foreground-muted">
+          A seat frees up automatically when an approved registration is rejected or
+          cancelled. Open an event to approve someone directly.
         </p>
       )}
     </WidgetCard>
@@ -98,7 +119,13 @@ const STATUS_CLASSES: Record<string, string> = {
   PENDING: 'border-border bg-surface-secondary text-foreground-muted',
 };
 
-export function RecentRegistrations({ items }: { items: DashboardSummary['recentRegistrations'] }) {
+export function RecentRegistrations({
+  items,
+  orgSlug,
+}: {
+  items: DashboardSummary['recentRegistrations'];
+  orgSlug: string;
+}) {
   return (
     <WidgetCard title="Recent registrations" count={items.length}>
       {items.length === 0 && <EmptyLine>No registrations yet</EmptyLine>}
@@ -106,8 +133,13 @@ export function RecentRegistrations({ items }: { items: DashboardSummary['recent
         {items.map((r) => (
           <li key={r.id} className="flex items-center justify-between gap-3 py-2.5">
             <div className="min-w-0">
-              <p className="truncate text-sm font-medium">{r.eventTitle}</p>
-              <p className="text-xs text-foreground-muted">{relativeTime(r.createdAt)}</p>
+              <p className="truncate text-sm font-medium">{r.userName}</p>
+              <p className="truncate text-xs text-foreground-muted">
+                <Link href={`/${orgSlug}/events/${r.eventId}`} className="hover:text-primary">
+                  {r.eventTitle}
+                </Link>{' '}
+                · {relativeTime(r.createdAt)}
+              </p>
             </div>
             <Badge variant="outline" className={cn('shrink-0 capitalize', STATUS_CLASSES[r.status])}>
               {r.status.toLowerCase()}
@@ -126,10 +158,17 @@ export function ActivityFeed({ items }: { items: DashboardSummary['activityFeed'
       <ul className="flex flex-col divide-y divide-border">
         {items.map((a) => (
           <li key={a.id} className="flex items-center justify-between gap-3 py-2.5">
-            {/* The feed carries actor ids, not names (backend keeps PII out) —
-                render the action itself rather than a fake "Someone …". */}
-            <p className="min-w-0 truncate text-sm first-letter:uppercase">
-              {auditActionSentence(a.action)}
+            <p className="min-w-0 truncate text-sm">
+              {a.actorName ? (
+                <>
+                  <span className="font-medium">{a.actorName}</span>{' '}
+                  <span className="text-foreground-muted">{auditActionSentence(a.action)}</span>
+                </>
+              ) : (
+                <span className="text-foreground-muted first-letter:uppercase">
+                  {auditActionSentence(a.action)}
+                </span>
+              )}
             </p>
             <span className="shrink-0 text-xs text-foreground-subtle">
               {relativeTime(a.createdAt)}

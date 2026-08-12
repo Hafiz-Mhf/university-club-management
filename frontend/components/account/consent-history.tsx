@@ -1,5 +1,6 @@
 'use client';
 
+import { Refreshing } from '@/components/ui/refreshing';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useConsents } from '@/features/pdpa/use-pdpa';
 
@@ -24,18 +25,20 @@ export function ConsentHistory() {
   }
 
   return (
-    <ul className="flex flex-col gap-2">
-      {consents.data.map((c) => (
-        <li
-          key={c.id}
-          className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm"
-        >
-          <span className="capitalize">{c.purpose}</span>
-          <span className="text-foreground-muted">
-            Policy {c.policyVersion} · {dateFmt.format(new Date(c.grantedAt))}
-          </span>
-        </li>
-      ))}
-    </ul>
+    <Refreshing active={consents.isFetching} label="Refreshing consent history">
+      <ul className="flex flex-col gap-2">
+        {consents.data.map((c) => (
+          <li
+            key={c.id}
+            className="flex items-center justify-between rounded-md border border-border px-3 py-2 text-sm"
+          >
+            <span className="capitalize">{c.purpose}</span>
+            <span className="text-foreground-muted">
+              Policy {c.policyVersion} · {dateFmt.format(new Date(c.grantedAt))}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </Refreshing>
   );
 }

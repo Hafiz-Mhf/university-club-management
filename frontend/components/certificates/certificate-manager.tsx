@@ -24,6 +24,8 @@ import { useRegistrations } from '@/features/registrations/use-registrations';
 import { useMembers } from '@/features/members/use-members';
 import { relativeTime } from '@/features/dashboard/format';
 import { api, ApiError } from '@/lib/api';
+import { Refreshing } from '@/components/ui/refreshing';
+import { SkeletonList } from '@/components/ui/skeleton-list';
 
 function formatFileSize(bytes: number): string {
   return `${(bytes / 1024).toFixed(0)} KB`;
@@ -58,7 +60,7 @@ export function CertificateManager({ orgId, eventId }: { orgId: string; eventId:
     [attendance.data, registrations.data, certifiedUserIds],
   );
 
-  if (certificates.isPending) return null;
+  if (certificates.isPending) return <SkeletonList rows={3} rowClassName="h-16" label="Loading certificates" />;
   if (certificates.isError) {
     return <p className="text-sm text-foreground-muted">Couldn&apos;t load certificates.</p>;
   }
@@ -131,7 +133,11 @@ export function CertificateManager({ orgId, eventId }: { orgId: string; eventId:
           No certificates issued yet.
         </p>
       ) : (
-        <div className="flex flex-col gap-2">
+        <Refreshing
+          active={certificates.isFetching}
+          label="Refreshing certificates"
+          className="flex flex-col gap-2"
+        >
           {(certificates.data ?? []).map((c) => (
             <div
               key={c.id}
@@ -160,7 +166,7 @@ export function CertificateManager({ orgId, eventId }: { orgId: string; eventId:
               </div>
             </div>
           ))}
-        </div>
+        </Refreshing>
       )}
 
       <Dialog open={removing !== null} onOpenChange={(open) => !open && setRemoving(null)}>

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Hanken_Grotesk, Inter } from 'next/font/google';
 import { QueryProvider } from '@/lib/query-client';
+import { Toaster } from '@/components/ui/sonner';
 import './globals.css';
 
 const hanken = Hanken_Grotesk({
@@ -47,6 +48,10 @@ export default function RootLayout({
       </head>
       <body className="min-h-full flex flex-col">
         <QueryProvider>{children}</QueryProvider>
+        {/* Mounted once at the root — confirmations for actions whose result
+            isn't otherwise visible on screen (registering, cancelling,
+            submitting feedback). */}
+        <Toaster position="bottom-right" />
       </body>
     </html>
   );

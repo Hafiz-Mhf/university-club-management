@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Refreshing } from '@/components/ui/refreshing';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Dialog,
@@ -38,7 +39,11 @@ export function GalleryGrid({ orgId, canManage }: { orgId: string; canManage: bo
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+      <Refreshing
+        active={gallery.isFetching}
+        label="Refreshing photos"
+        className="grid grid-cols-2 gap-3 sm:grid-cols-3"
+      >
         {gallery.data.map((photo) => (
           <div key={photo.id} className="flex flex-col gap-1.5">
             <div className="aspect-square overflow-hidden rounded-md bg-surface-secondary">
@@ -54,7 +59,7 @@ export function GalleryGrid({ orgId, canManage }: { orgId: string; canManage: bo
             )}
           </div>
         ))}
-      </div>
+      </Refreshing>
 
       <Dialog open={removing !== null} onOpenChange={(open) => !open && setRemoving(null)}>
         <DialogContent>

@@ -280,17 +280,27 @@ or step," consistent with the whole session.
 
 ---
 
-## Test baseline (as of Consent-versioned re-prompt merge, commit `1cc32db`)
+## Test baseline (as of the committee UX pass)
 
-- Unit tests: 101/101 passing
-- E2E tests: 326/326 passing (5 new, added by this feature — `pdpa.e2e-spec.ts`
-  grew a `consent-versioned re-prompt` describe block; no new spec file)
+- Backend unit: 102/102 passing
+- Backend e2e: 348/348 passing (68 suites)
+- Frontend unit (vitest): 194/194 passing; `tsc --noEmit` clean
+- Frontend lint: 5 errors, **all pre-existing** (`events/page.tsx` impure
+  render call, `my-qr-dialog.tsx` / `qr-scanner.tsx` setState-in-effect) —
+  verified byte-identical against a clean `git stash`, so treat these as the
+  baseline, not as regressions introduced by recent work.
 
-A second-mid-session-flake pattern was noted twice earlier (Event Feedback +
-NPS, Committee Handover Pack) — `pdpa`/`certificates-list-download` timing out
-on a back-to-back full run under load, clean in isolation and on the next
-full run. Not seen again during this feature's execution. Still read as
-resource contention, not a regression.
+Earlier baseline for reference: 101 unit / 326 e2e at the Consent-versioned
+re-prompt merge (commit `1cc32db`).
+
+A mid-session-flake pattern has now been seen three times (Event Feedback +
+NPS, Committee Handover Pack, and the committee UX pass). Latest instance:
+`npm test` run immediately after a full 68-suite e2e sweep reported 21
+failures across 4 suites; the same command passed 102/102 twice standalone
+moments later. Same shape every time — back-to-back full runs sharing one
+Postgres container. Read as resource contention, not a regression: **re-run
+standalone before believing a failure that appears right after an e2e
+sweep.**
 
 Re-verify with `npm test` / `npm run test:e2e` in `backend/` before trusting
 these numbers if significant time has passed.
@@ -1304,23 +1314,44 @@ unscoped.
 
 ## Next step
 
-Frontend Slice 14 (Gallery Management) merged to `main` — docs-synced,
-tests green, branch deleted (see finish-branch below for confirmation
-this actually happened by the time you're reading this).
+**Latest work: a critique-driven committee UX pass** (not a roadmap slice).
+`/impeccable critique` was run against the **president account** on real
+seeded data, then its findings were fixed. Score **18/40 → 28/40**, 2 P0 and
+3 P1 cleared. Full write-up in `docs/uiux.md` § "Committee UX pass"; the
+before/after snapshots are in `.impeccable/critique/`.
 
-**One Public Club Page sub-slice remains: Achievements management**
-(committee-side create/edit/remove UI for the already-shipped
-`AchievementsController`, same `MANAGE_EVENTS` RBAC tier, no new backend
-endpoints, same "Public Page" nav area as its second tab — the Gallery
-tab already established the shape). Ask/confirm before starting its
-brainstorm.
+What that pass changed, in one line each:
+- `GET .../registrations` returns registrant identity; the list is a real
+  sortable table with CSV export (first use of `components/ui/table.tsx`).
+- `POST .../registrations/:id/approve` exists — capacity-enforced promotion,
+  reverses a mistaken reject, refuses to undo a participant's own cancel.
+- `apiOrNull()` reads 404 as `data: null`, killing an infinite refetch loop
+  that ran ~112 req/s on every event page (measured 558 requests / 5s → 0).
+- Events list, dashboard, analytics charts, member list, event pickers,
+  contrast tokens and tab semantics all reworked (see uiux.md).
 
-Backend Phase 2 remains fully shipped (11/11 items, see above); Phase 3
-backend items are still unscoped and untouched. Slice 6 remains the only
-frontend slice to have touched a backend *feature* file for a bug fix;
-Slice 13 remains the only slice with a planned, risk-free backend rename.
-Slices 7 through 12 and 14 all held "zero backend files" — Slice 13 is
-still the sole exception.
+**Demo data now exists.** `backend/prisma/seed.ts` (`npm run prisma:seed`,
+idempotent — wipes and rebuilds by org slug) creates two orgs: *Tech
+Innovators Society* (`/tech-innovators`, 16 members, 6 events across every
+lifecycle state, 58 registrations, 55 attendance rows, 29 feedback responses
+over three completed events, minutes, assets, achievements) and *Campus Photography Club* (`/photography-club`, shares
+users so the org switcher and tenant isolation are both exercisable). All
+accounts use `Password123!`; `aisyah@demo.test` is the president. **Critique
+or verify against this seed, never against an empty org** — every P0 in the
+pass above was invisible on near-empty data.
+
+One flow is deliberately left un-run in the seed: "Weekend Coding Bootcamp"
+is PUBLISHED-but-finished with attendance and feedback already in, so marking
+it completed in the UI kicks off real certificate generation through BullMQ.
+
+**Roadmap position is unchanged by this pass:** Backend Phase 2 fully shipped
+(11/11). Frontend Slices 1–16 shipped, which completes Phase 2 — Organization
+Workspace end to end. Phase 3 remains unscoped and untouched.
+
+Known gaps, all P2/P3 in the second critique snapshot, none blocking: no bulk
+approve/reject on registrations, no ⌘K command palette (the topbar still
+reserves its slot in a comment), no contextual help anywhere, event-detail
+breadcrumbs don't name the event.
 
 Standing preferences remain in force for whatever comes next: pause before
 Task 1, pause before the live-verification task too (added as a standing

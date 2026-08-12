@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import type { Registration } from '@/types/api';
+import type { Registration, RegistrationWithUser } from '@/types/api';
 
 function base(orgId: string, eventId: string) {
   return `/organizations/${orgId}/events/${eventId}/registrations`;
@@ -18,7 +18,7 @@ export function useMyRegistration(orgId: string, eventId: string) {
 export function useRegistrations(orgId: string, eventId: string) {
   return useQuery({
     queryKey: ['org', orgId, 'event', eventId, 'registrations'],
-    queryFn: () => api<Registration[]>(base(orgId, eventId)),
+    queryFn: () => api<RegistrationWithUser[]>(base(orgId, eventId)),
   });
 }
 
@@ -28,6 +28,10 @@ function useInvalidateRegistrations(orgId: string, eventId: string) {
     qc.invalidateQueries({ queryKey: ['org', orgId, 'event', eventId, 'registrations'] });
     qc.invalidateQueries({ queryKey: ['org', orgId, 'event', eventId, 'registration', 'me'] });
     qc.invalidateQueries({ queryKey: ['org', orgId, 'event', eventId] });
+    // The events list carries approved/waitlisted headcounts, and the dashboard
+    // surfaces the waitlist — both go stale the moment a status changes.
+    qc.invalidateQueries({ queryKey: ['org', orgId, 'events'] });
+    qc.invalidateQueries({ queryKey: ['org', orgId, 'dashboard'] });
   };
 }
 
@@ -48,6 +52,20 @@ export function useCancelRegistration(orgId: string, eventId: string) {
   return useMutation({
     mutationFn: (registrationId: string) =>
       api<Registration>(`${base(orgId, eventId)}/${registrationId}/cancel`, { method: 'POST' }),
+    onSuccess: invalidate,
+  });
+}
+
+/**
+ * Committee-side promotion: waitlisted → approved, or undoing a mistaken
+ * rejection. The backend refuses (409) when the event is already at capacity,
+ * and its message names the way out, so it is surfaced verbatim.
+ */
+export function useApproveRegistration(orgId: string, eventId: string) {
+  const invalidate = useInvalidateRegistrations(orgId, eventId);
+  return useMutation({
+    mutationFn: (registrationId: string) =>
+      api<Registration>(`${base(orgId, eventId)}/${registrationId}/approve`, { method: 'POST' }),
     onSuccess: invalidate,
   });
 }

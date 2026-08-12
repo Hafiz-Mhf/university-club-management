@@ -1,16 +1,17 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { Plus } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { FileList } from '@/components/files/file-list';
 import { UploadFileDialog } from '@/components/files/upload-file-dialog';
 import { AssetList } from '@/components/assets/asset-list';
 import { AssetDialog } from '@/components/assets/asset-dialog';
 import { MinutesList } from '@/components/minutes/minutes-list';
+import { TabStrip } from '@/components/ui/tab-strip';
 import { useOrg } from '@/features/orgs/org-provider';
 import { isCommittee } from '@/features/orgs/roles';
-import { cn } from '@/lib/utils';
 import type { Asset } from '@/types/api';
 
 type Tab = 'files' | 'minutes' | 'assets';
@@ -39,6 +40,15 @@ export default function WorkspacePage() {
             Upload file
           </Button>
         )}
+        {tab === 'minutes' && committee && (
+          <Link
+            href={`/${org.slug}/workspace/minutes/new`}
+            className={buttonVariants({ size: 'sm' })}
+          >
+            <Plus className="size-3.5" />
+            New minutes
+          </Link>
+        )}
         {tab === 'assets' && committee && (
           <Button size="sm" onClick={() => setAssetDialog({ mode: 'create' })}>
             <Plus className="size-3.5" />
@@ -47,19 +57,7 @@ export default function WorkspacePage() {
         )}
       </div>
 
-      <div className="flex w-fit flex-wrap rounded-md border border-border p-0.5">
-        {TABS.map((t) => (
-          <Button
-            key={t.id}
-            variant="ghost"
-            size="sm"
-            onClick={() => setTab(t.id)}
-            className={cn(tab === t.id && 'bg-primary/10 text-primary')}
-          >
-            {t.label}
-          </Button>
-        ))}
-      </div>
+      <TabStrip label="Workspace sections" tabs={TABS} value={tab} onChange={setTab} />
 
       {tab === 'files' && <FileList orgId={org.id} canManage={committee} />}
       {tab === 'minutes' && (

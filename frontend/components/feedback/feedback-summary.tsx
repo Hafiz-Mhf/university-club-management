@@ -1,8 +1,9 @@
 'use client';
 
 import { Card, CardContent } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
 import { useFeedbackSummary } from '@/features/feedback/use-feedback';
+import { Refreshing } from '@/components/ui/refreshing';
+import { SkeletonList } from '@/components/ui/skeleton-list';
 
 function fmt(v: number | null) {
   return v === null ? '—' : v.toFixed(1);
@@ -13,11 +14,12 @@ export function FeedbackSummary({ orgId, eventId }: { orgId: string; eventId: st
 
   if (summary.isPending) {
     return (
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <Skeleton key={i} className="h-20 rounded-lg" />
-        ))}
-      </div>
+      <SkeletonList
+        rows={4}
+        rowClassName="h-20"
+        className="grid grid-cols-2 gap-3 sm:grid-cols-4"
+        label="Loading feedback summary"
+      />
     );
   }
 
@@ -43,7 +45,11 @@ export function FeedbackSummary({ orgId, eventId }: { orgId: string; eventId: st
   ];
 
   return (
-    <div className="flex flex-col gap-4">
+    <Refreshing
+      active={summary.isFetching}
+      label="Refreshing feedback summary"
+      className="flex flex-col gap-4"
+    >
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {tiles.map(([label, value]) => (
           <Card key={label} className="shadow-card">
@@ -69,6 +75,6 @@ export function FeedbackSummary({ orgId, eventId }: { orgId: string; eventId: st
           ))}
         </div>
       )}
-    </div>
+    </Refreshing>
   );
 }

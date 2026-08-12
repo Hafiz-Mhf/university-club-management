@@ -1468,3 +1468,121 @@ Committee Handover Pack download action. **This completes Phase 2 —
 Organization Workspace entirely, backend and frontend both** — every item
 on `docs/roadmap.md`'s Phase 2 list is now shipped. Phase 3 remains
 unscoped.
+
+---
+
+## Committee UX pass — critique-driven (shipped)
+
+Not a roadmap slice: a `/impeccable critique` of the **president account**
+against real seeded data (16 members, 5 events, 44 registrations across two
+orgs), then a fix pass against its findings. Score moved **18/40 → 28/40**,
+2 P0 and 3 P1 issues cleared. Snapshots live in `.impeccable/critique/`.
+
+### Why real data mattered
+
+Every P0 was invisible against the empty/near-empty orgs earlier slices were
+verified on. A registrations list of one row looks fine as `userId` + badge;
+nine rows of raw UUIDs are unusable. A bar chart with three bars renders every
+label; nine bars silently drop four. **Seed the product before critiquing it**
+— `backend/prisma/seed.ts` now builds this state in one command
+(`npm run prisma:seed`).
+
+### P0 — registrations identified people by UUID
+
+`GET .../registrations` returned `userId` and nothing else, so the committee's
+core task (decide about a person) had no person in it. The endpoint now returns
+`user { id, fullName, email, studentId, programme }` under explicit selects
+(§ registration in `docs/security.md` for the PII scoping rules).
+
+The UI became a real table (`components/ui/table.tsx`, the project's first
+table primitive) instead of a card per row: sortable by registrant / status /
+date, waitlist-first default ordering with FIFO within a status, per-status
+counts on the filter chips, a live "6 of 6 seats taken · waitlist active"
+readout, form answers behind a per-row expander instead of five lines dumped
+into every row, and CSV export (`features/registrations/csv.ts`, BOM-prefixed
+so Excel doesn't mangle non-ASCII names). Nine rows now fit one screen; they
+occupied three before.
+
+### P0 — the event page fetched ~112 requests/second, forever
+
+Three "do I have one of these?" endpoints (`attendance/me`, `feedback/me`,
+`certificates/me`) 404 for anyone not registered for that event — which is
+every committee member looking at an event they don't attend. Those 404s were
+thrown as `ApiError`, and **an errored TanStack query is permanently stale**,
+so it refetched on every remount: measured 558 requests in 5 seconds, never
+stopping, with the participation panel stuck in a skeleton that never resolved.
+
+Fix is a contract, not a patch: `apiOrNull()` in `lib/api.ts` reads 404 as
+`data: null` while still throwing on every other status, so "nothing here" is
+data and 403/500 remain failures. Measured after: 0 requests in 4 seconds,
+console errors 184 → 2. Four unit tests pin all four cases.
+
+**Rule going forward:** any `.../me` style existence check uses `apiOrNull`.
+`retry: false` treats the symptom (fewer retries) and leaves the query in an
+error state; only 404-as-data removes the cause.
+
+### P1 — no way to approve anyone
+
+The dashboard advertised "Pending approvals" and then told the user, in muted
+text, to approve "from the Events page (a later slice)" — where the only action
+was a red **Reject**. Now: `POST .../registrations/:id/approve` exists
+(capacity-enforced, reverses a mistaken reject, refuses to touch a
+participant's own cancellation), the widget is titled **Waitlist** because
+every row in it is `WAITLISTED`, its rows name the person and deep-link to
+`/[orgSlug]/events/[id]?tab=registrations`, and it explains the automatic FIFO
+promotion rule instead of pointing at a page that couldn't do the job.
+
+### P1 — six charts, one green, half the labels missing
+
+`HorizontalBarChart` now sizes its height to `rows × ~34px` with
+`interval={0}` — the committee-activity chart went from 9 bars / 5 labels to
+14 bars / 14 labels, on the one chart whose entire purpose is naming who did
+the work. One hue per chart assigned by subject (`design.md` § chart series
+palette), NPS clamped to its real 0–10 domain in the feedback hue, axis dates
+rendered `17 Jul` rather than `2026-07-17` (`chartDate()`, parsed as UTC so a
+date-only string can't slip a day backwards), and sparse series say "two data
+points — too few to read as a trend" instead of drawing a grid with two dots.
+
+### P1 — the design system broke its own contrast baseline
+
+`--foreground-subtle` measured 3.56–3.88:1 dark and ~3.1:1 light against a
+committed 4.5:1, while carrying every timestamp, placeholder and helper line
+in the product. Both greys were re-derived against `surface`, `background` and
+`surface-secondary` (the tightest of the three, not just the page bg) and
+`design.md`'s token table now records the constraint. Verified by sweeping
+every rendered text node on dashboard and members in both themes: **0
+failures**, where the same sweep previously found the token failing everywhere.
+
+### Smaller fixes in the same pass
+
+Event rows carry `10/60 seats` / `6/6 seats · 3 waiting` (backend `list()`
+groups registration counts in one query rather than N+1). Attendance and
+Certificates share one `EventPickerList` — dates, status, headcount,
+live-events-first ordering — instead of two identical bare title lists.
+Destructive event actions sit behind a divider as ghost buttons with confirm
+copy that states what survives vs what's destroyed. Members splits Committee
+from Members & volunteers with counts and shows studentId · programme.
+`relativeTime()` hands over to an absolute date past 30 days ("380d ago" was
+arithmetic homework). Both tab groups carry `role="tab"` / `aria-selected`
+(they were plain buttons distinguished by a colour tint alone). Workspace's
+primary action sits in the page header on all three tabs. Empty states teach
+what belongs in them. KPI cards go 2×2 on mobile, freeing ~280px of fold.
+
+### Test baseline
+
+Backend 348 e2e (68 suites) + 102 unit — includes 8 new approve e2e tests
+(capacity refusal, undo-reject, cancelled-is-final, already-approved, RBAC,
+cross-org isolation), registrant-identity and no-`passwordHash` assertions on
+the list endpoint, an event-headcount test, and a dashboard names test.
+Frontend 194 unit (4 new for `apiOrNull`, 3 for `chartDate`), typecheck clean,
+`detect.mjs` 0 findings. Five pre-existing eslint errors remain in
+`events/page.tsx`, `my-qr-dialog.tsx` and `qr-scanner.tsx` (impure render
+calls, setState-in-effect) — verified byte-identical against a clean stash,
+none introduced here.
+
+**What's real after this pass:** everything from Slices 1–16, with the
+committee-facing surfaces (registrations, dashboard, events list, analytics,
+attendance/certificate pickers, members) rebuilt around identity, headcounts
+and a working approval action. Remaining known gaps, all P2/P3 in the second
+snapshot: no bulk approve/reject, no ⌘K command palette (the topbar still
+reserves its slot), no contextual help, breadcrumbs don't name the event.

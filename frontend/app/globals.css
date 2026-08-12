@@ -17,8 +17,12 @@
   --surface-secondary: #f3f2ee;
   --border: #e7e5e0;
   --foreground: #201f1c;
-  --foreground-muted: #6b6862;
-  --foreground-subtle: #8f8c85;
+  /* Both greys clear WCAG AA (4.5:1) against surface, background AND sidebar —
+     verified in both themes. The previous --foreground-subtle (#8f8c85 light /
+     #78756f dark) sat at 3.1–3.9:1 and carried every timestamp, placeholder and
+     helper line in the product. */
+  --foreground-muted: #5f5c57;
+  --foreground-subtle: #6f6c66;
 
   --primary: #6e56cf;
   --primary-foreground: #ffffff;
@@ -66,6 +70,10 @@
   --chart-3: #b8860b;
   --chart-4: var(--domain-certificates);
   --chart-5: var(--domain-analytics);
+  /* Feedback/NPS series. Same lightness band as --chart-1..3 in both themes
+     (L≈0.58 light / 0.68 dark), so it reads as a peer of the other chart
+     colors rather than an alert. Redefined under [data-theme="dark"]. */
+  --chart-feedback: #e1487d;
   --sidebar: var(--surface-secondary);
   --sidebar-foreground: var(--foreground);
   --sidebar-primary: var(--primary);
@@ -82,8 +90,8 @@
   --surface-secondary: #131216;
   --border: #2c2a30;
   --foreground: #f2f1ee;
-  --foreground-muted: #a8a5a0;
-  --foreground-subtle: #78756f;
+  --foreground-muted: #b5b2ac;
+  --foreground-subtle: #918d86;
 
   --domain-events: #9b85ff;
   --domain-registrations: #5b9cf5;
@@ -92,6 +100,8 @@
   --domain-feedback: #f06b9b;
   --domain-analytics: #5fb563;
   --domain-ops: #c08a66;
+
+  --chart-feedback: #f06b9b;
 
   --success: #4ade6e;
   --warning: #e0a340;
@@ -149,6 +159,7 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
+  --color-chart-feedback: var(--chart-feedback);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);

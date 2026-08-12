@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api } from '@/lib/api';
+import { api, apiOrNull } from '@/lib/api';
 import type { FeedbackResponse } from '@/types/api';
 import type { FeedbackFormInput } from './schemas';
 
@@ -21,8 +21,8 @@ export interface FeedbackSummary {
 export function useMyFeedback(orgId: string, eventId: string) {
   return useQuery({
     queryKey: ['org', orgId, 'event', eventId, 'feedback', 'me'],
-    queryFn: () => api<FeedbackResponse>(`${base(orgId, eventId)}/me`),
-    retry: false, // a 404 here is a meaningful answer (not submitted yet), not a flake
+    // 404 = "not submitted yet", which is data. See apiOrNull.
+    queryFn: () => apiOrNull<FeedbackResponse>(`${base(orgId, eventId)}/me`),
   });
 }
 

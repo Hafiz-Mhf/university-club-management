@@ -5,13 +5,14 @@ import Link from 'next/link';
 import { CalendarDays, Plus, Search } from 'lucide-react';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Skeleton } from '@/components/ui/skeleton';
 import { EventCard } from '@/components/events/event-card';
 import { useEvents } from '@/features/events/use-events';
 import { useOrg } from '@/features/orgs/org-provider';
 import { isCommittee } from '@/features/orgs/roles';
 import type { Event, EventStatus } from '@/types/api';
 import { cn } from '@/lib/utils';
+import { Refreshing } from '@/components/ui/refreshing';
+import { SkeletonList } from '@/components/ui/skeleton-list';
 
 type StatusFilter = 'all' | EventStatus;
 type View = 'upcoming' | 'past';
@@ -95,11 +96,7 @@ export default function EventsPage() {
       </div>
 
       {events.isPending && (
-        <div className="flex flex-col gap-3">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <Skeleton key={i} className="h-24 rounded-lg" />
-          ))}
-        </div>
+        <SkeletonList rows={3} rowClassName="h-24" className="gap-3" label="Loading events" />
       )}
 
       {events.isError && (
@@ -135,11 +132,15 @@ export default function EventsPage() {
         </div>
       )}
 
-      <div className="flex flex-col gap-3">
+      <Refreshing
+        active={events.isFetching && !events.isPending}
+        label="Refreshing events"
+        className="flex flex-col gap-3"
+      >
         {filtered.map((event) => (
           <EventCard key={event.id} event={event} orgSlug={org.slug} />
         ))}
-      </div>
+      </Refreshing>
     </main>
   );
 }

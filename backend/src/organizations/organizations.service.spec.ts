@@ -197,6 +197,59 @@ describe('OrganizationsService logo/banner upload', () => {
   });
 });
 
+describe('OrganizationsService.listForUser', () => {
+  let orgs: OrganizationsService;
+  let prisma: PrismaService;
+  let auth: AuthService;
+  let userId: string;
+  let orgId: string;
+  const png = () => Buffer.from('89504e470d0a1a0a', 'hex');
+
+  beforeAll(async () => {
+    const moduleRef = await Test.createTestingModule({
+      imports: [ConfigModule.forRoot({ isGlobal: true }), JwtModule.register({ secret: 'test' })],
+      providers: [OrganizationsService, AuthService, PrismaService, AuditService, RefreshTokenRepository, StorageService],
+    }).compile();
+    orgs = moduleRef.get(OrganizationsService);
+    prisma = moduleRef.get(PrismaService);
+    auth = moduleRef.get(AuthService);
+    await prisma.onModuleInit();
+    const storage = moduleRef.get(StorageService);
+    await storage.onModuleInit();
+    const u = await auth.register({ email: `orglist-${Date.now()}@test.io`, password: 'password123', fullName: 'Pres', consent: true });
+    userId = u.id;
+    const org = await orgs.create(userId, { name: 'ListOrg', slug: `listorg-${Date.now()}` });
+    orgId = org.id;
+  });
+  afterAll(async () => {
+    await prisma.membership.deleteMany({ where: { userId, organizationId: orgId } });
+    await prisma.auditLog.deleteMany({ where: { organizationId: orgId } });
+    await prisma.organization.delete({ where: { id: orgId } });
+    await prisma.consentRecord.deleteMany({ where: { userId } });
+    await prisma.user.delete({ where: { id: userId } });
+    await prisma.$disconnect();
+  });
+
+  it('resolves a signed logoUrl so the org switcher can render branding', async () => {
+    await orgs.uploadLogo(orgId, { mimetype: 'image/png', size: 8, buffer: png() }, userId);
+    const list = await orgs.listForUser(userId);
+    expect(list.find((o) => o.id === orgId)!.logoUrl).not.toBeNull();
+  });
+
+  it('never leaks raw storage keys to the client', async () => {
+    const found = (await orgs.listForUser(userId)).find((o) => o.id === orgId);
+    expect(found).not.toHaveProperty('logoKey');
+    expect(found).not.toHaveProperty('bannerKey');
+  });
+
+  it('returns null logoUrl for an org with no logo', async () => {
+    await orgs.deleteLogo(orgId, userId);
+    const found = (await orgs.listForUser(userId)).find((o) => o.id === orgId);
+    expect(found!.logoUrl).toBeNull();
+    expect(found!.bannerUrl).toBeNull();
+  });
+});
+
 describe('OrganizationsService logo/banner delete', () => {
   let orgs: OrganizationsService;
   let prisma: PrismaService;

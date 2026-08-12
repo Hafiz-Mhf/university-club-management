@@ -143,7 +143,8 @@ Invariants enforced in `EventsService`:
 
 No new role group: `MANAGE_EVENTS` (see above) is reused for registration-form
 management (`PUT`/`DELETE` on `registration-form`) and for the committee
-side of registrations (`GET` list, `POST /:registrationId/reject`).
+side of registrations (`GET` list, `POST /:registrationId/approve`,
+`POST /:registrationId/reject`).
 
 Endpoints (`/organizations/:orgId/events/:eventId/registrations` +
 `.../registration-form`):
@@ -154,6 +155,7 @@ Endpoints (`/organizations/:orgId/events/:eventId/registrations` +
 | `GET /registrations` | MANAGE_EVENTS | list all registrations for the event |
 | `GET /registrations/me` | any org member (TenantGuard only) | caller's own registration |
 | `POST /registrations/:id/cancel` | any org member (TenantGuard only) | ownership-checked, see below |
+| `POST /registrations/:id/approve` | MANAGE_EVENTS | promote WAITLISTED / reverse REJECTED; capacity-enforced |
 | `POST /registrations/:id/reject` | MANAGE_EVENTS | any registration in the org |
 | `PUT` / `GET` / `DELETE registration-form` | `PUT`/`DELETE`: MANAGE_EVENTS; `GET`: any org member | form GET has no `RolesGuard` |
 
@@ -181,6 +183,20 @@ asc, FIFO) to `APPROVED`. Promotion uses a CAS `updateMany` loop (not a single
 registration for the same event degrades to "try the next-oldest waitlisted
 row" instead of aborting the whole transaction.
 
+**Committee approval (`approve`):** promotes a `WAITLISTED` registration, or
+reverses a `REJECTED` one when the committee rejected someone by mistake. It
+takes the **same `SELECT ... FOR UPDATE` lock on the `Event` row** as
+`register()` before counting `APPROVED` rows, so the capacity ceiling cannot be
+breached through this door either — at capacity it returns `409` naming the way
+out ("raise the capacity or reject an approved registration first") rather than
+silently overfilling. A `CANCELLED` registration is **not** approvable: the
+participant withdrew their own place, and reinstating it is their decision, not
+the committee's (409). Approving creates the `Attendance` row the registrant
+needs to be checked in, writes `registration.approve` `{registrationId,
+eventId, from, to}`, and enqueues the same "promoted" notification the
+automatic FIFO promotion uses. Compare-and-swap on `status: current.status`,
+mapped to 409 on a lost race, matching `resolve()`.
+
 **Cancel vs. reject split:** `cancel` is self-service — the caller may only
 cancel their **own** registration (403 if not, checked after a 404
 existence/org-scope check). `reject` is committee-only (MANAGE_EVENTS) and
@@ -197,6 +213,28 @@ audit row for the loser.
 `{eventId, fieldCount}`, `form.delete` `{eventId}` — metadata is ids/enum
 values/counts only; registration **answers are never logged**, in keeping
 with the "never personal data in logs" rule.
+
+**Personal data on the committee list (`GET /registrations`):** the list
+returns each registrant's identity — `user { id, fullName, email, studentId,
+programme }` — because deciding whether to approve or reject a person is
+impossible against an opaque `userId`. Scope limits, all enforced by explicit
+Prisma `select` (never a bare `include` of `User`):
+
+- `passwordHash` and `mfaSecret` are never selected; an e2e test asserts
+  `passwordHash` appears nowhere in the response body.
+- `studentId` / `programme` come from the **org-scoped `Membership`** row
+  (`where: { organizationId }`), so org A's committee never sees the profile
+  data a user filled in for org B.
+- The route is `MANAGE_EVENTS` + `TenantGuard`, so this is committee-only, and
+  `GET /registrations/me` (any member) still returns a bare `Registration`
+  with no user block — a participant reading their own row already knows who
+  they are.
+
+The same reasoning applies to the dashboard: `pendingApprovals` and
+`recentRegistrations` carry `userName`, and the activity feed resolves
+`actorUserId` to `actorName`, all via `select: { fullName: true }` on
+already-org-scoped rows. Names only — no email, no student id, in a payload
+that renders on a shared screen.
 
 **PDPA note:** a `ConsentRecord` (purpose `event-registration`,
 `policyVersion`, `grantedAt`, `ipAddress`) is written in the same transaction
@@ -543,7 +581,7 @@ New endpoints on `OrganizationsController`: `POST`/`DELETE .../logo` and `.../ba
 
 Two new nullable `Organization` columns, `bannerKey` and `secondaryColor` (default `#1e293b`). Logo/banner are single overwritable slots at a deterministic key (`branding/<orgId>/<kind>.<ext>`) — re-uploading with a different image format deletes the old object after the new one is confirmed written (never the reverse, so a failed upload never leaves the org logo-less). They do **not** join the shared storage-quota aggregate (`Certificate`/`OrgFile`/`GalleryPhoto`'s `SUM(fileSizeBytes)`) — a flat 2MB per-upload cap is enough for a non-accumulating single-image field, so `files.service.ts`/`certificates.service.ts`/`gallery.service.ts` are unchanged.
 
-`OrganizationsService.findOne()` now resolves `logoKey`/`bannerKey` to signed `logoUrl`/`bannerUrl` (5-minute TTL, matching every other signed-URL precedent) instead of returning raw storage keys — the authenticated org view and the public club page (`public.service.ts getProfile()`, which also gained `bannerUrl`) now behave identically. `logoKey` was removed from the raw `PATCH /organizations/:orgId` body entirely — upload is the only way to set it, closing off a client pointing it at an arbitrary/unvalidated storage key.
+`OrganizationsService` resolves `logoKey`/`bannerKey` to signed `logoUrl`/`bannerUrl` (5-minute TTL, matching every other signed-URL precedent) instead of returning raw storage keys, via a shared private `toClientOrg()` helper used by both `findOne()` and `listForUser()` — the authenticated org view, the org switcher (`GET /organizations`), and the public club page (`public.service.ts getProfile()`, which also gained `bannerUrl`) now all behave identically. `listForUser()` originally returned raw Prisma rows (`logoKey`/`bannerKey` un-stripped) since the org switcher only needed name/slug at the time — closed once the switcher started rendering the logo. `logoKey` was removed from the raw `PATCH /organizations/:orgId` body entirely — upload is the only way to set it, closing off a client pointing it at an arbitrary/unvalidated storage key.
 
 **Audit:** four new actions — `organization.logo.upload`, `organization.logo.delete`, `organization.banner.upload`, `organization.banner.delete` — same shape as every other mutation (`targetType: 'Organization'`, metadata `{ key }`, no personal data). A delete on an already-absent key is a no-op: no storage call, no audit row.
 

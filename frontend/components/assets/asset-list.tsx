@@ -17,6 +17,8 @@ import { resolveMemberName } from '@/features/certificates/resolve-member-name';
 import { useMembers } from '@/features/members/use-members';
 import { relativeTime } from '@/features/dashboard/format';
 import type { Asset } from '@/types/api';
+import { Refreshing } from '@/components/ui/refreshing';
+import { SkeletonList } from '@/components/ui/skeleton-list';
 
 export function AssetList({
   orgId,
@@ -32,16 +34,21 @@ export function AssetList({
   const remove = useDeleteAsset(orgId);
   const [removing, setRemoving] = useState<string | null>(null);
 
-  if (assets.isPending) return null;
+  if (assets.isPending) return <SkeletonList rows={4} label="Loading assets" />;
   if (assets.isError) {
     return <p className="text-sm text-foreground-muted">Couldn&apos;t load assets.</p>;
   }
   if (assets.data.length === 0) {
-    return <p className="py-8 text-center text-sm text-foreground-muted">No assets yet.</p>;
+    return (
+      <p className="mx-auto max-w-md py-10 text-center text-sm text-foreground-muted">
+        No assets yet. Track what the club owns — banners, equipment, cables — so nothing
+        goes missing between events or across a handover.
+      </p>
+    );
   }
 
   return (
-    <div className="flex flex-col gap-2">
+    <Refreshing active={assets.isFetching} label="Refreshing assets" className="flex flex-col gap-2">
       {assets.data.map((a) => (
         <div
           key={a.id}
@@ -104,6 +111,6 @@ export function AssetList({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </Refreshing>
   );
 }

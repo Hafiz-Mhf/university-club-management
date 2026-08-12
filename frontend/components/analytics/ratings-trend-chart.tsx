@@ -9,6 +9,7 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from '@/components/ui/chart';
+import { chartDate } from '@/features/analytics/format';
 
 export interface RatingsDatum {
   date: string;
@@ -32,9 +33,22 @@ export function RatingsTrendChart({ data }: { data: RatingsDatum[] }) {
     <ChartContainer config={config} className="aspect-auto h-64 w-full">
       <LineChart data={data} margin={{ left: 4, right: 4, top: 4, bottom: 4 }}>
         <CartesianGrid vertical={false} />
-        <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} minTickGap={24} />
+        <XAxis
+          dataKey="date"
+          tickLine={false}
+          axisLine={false}
+          tickMargin={8}
+          minTickGap={24}
+          tickFormatter={chartDate}
+        />
         <YAxis domain={[1, 5]} tickLine={false} axisLine={false} tickMargin={8} width={32} />
-        <ChartTooltip content={<ChartTooltipContent />} />
+        <ChartTooltip
+          content={
+            <ChartTooltipContent
+              labelFormatter={(label) => (typeof label === 'string' ? chartDate(label) : label)}
+            />
+          }
+        />
         <ChartLegend content={<ChartLegendContent />} />
         <Line
           dataKey="content"

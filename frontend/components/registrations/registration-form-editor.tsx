@@ -18,6 +18,7 @@ import {
 import { canEdit } from '@/features/events/status';
 import { ApiError } from '@/lib/api';
 import type { Event, FormFieldType } from '@/types/api';
+import { SkeletonList } from '@/components/ui/skeleton-list';
 
 const FIELD_TYPES: FormFieldType[] = ['TEXT', 'TEXTAREA', 'SELECT', 'CHECKBOX'];
 
@@ -40,7 +41,7 @@ export function RegistrationFormEditor({ orgId, event }: { orgId: string; event:
     }
   }, [formQuery.data, editor]);
 
-  if (formQuery.isPending) return null;
+  if (formQuery.isPending) return <SkeletonList rows={3} rowClassName="h-20" label="Loading registration form" />;
 
   // Falling through to the editor here would render the event's saved form as
   // empty, and Save does a full replace — one click would wipe a form that

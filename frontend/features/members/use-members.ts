@@ -1,6 +1,6 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import type { Member, MemberStatus, MembershipRole } from '@/types/api';
 
@@ -25,6 +25,10 @@ export function useMembers(orgId: string, filters: MemberFilters = {}) {
   return useQuery({
     queryKey: ['org', orgId, 'members', filters],
     queryFn: () => api<Member[]>(`${base(orgId)}${queryString(filters)}`),
+    // Changing a filter changes the key, which would otherwise drop the list
+    // back to `isPending` and swap the loaded rows for a skeleton. Hold the
+    // previous rows and let the caller show a refresh cue instead.
+    placeholderData: keepPreviousData,
   });
 }
 

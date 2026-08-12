@@ -147,11 +147,43 @@ export class RegistrationsService {
     return Object.fromEntries(Object.entries(answers).filter(([key]) => allowed.has(key)));
   }
 
-  list(organizationId: string, eventId: string) {
-    return this.prisma.registration.findMany({
+  /**
+   * The committee decides about *people*, so the row carries who registered —
+   * name, email, and the org-scoped membership fields (studentId/programme)
+   * used to match a registrant against the physical student in front of you.
+   * Explicit selects only: the User row also holds passwordHash and mfaSecret,
+   * which must never leave the service.
+   */
+  async list(organizationId: string, eventId: string) {
+    const rows = await this.prisma.registration.findMany({
       where: { eventId, organizationId },
       orderBy: { createdAt: 'asc' },
+      include: {
+        user: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+            memberships: {
+              where: { organizationId },
+              select: { studentId: true, programme: true },
+              take: 1,
+            },
+          },
+        },
+      },
     });
+
+    return rows.map(({ user, ...registration }) => ({
+      ...registration,
+      user: {
+        id: user.id,
+        fullName: user.fullName,
+        email: user.email,
+        studentId: user.memberships[0]?.studentId ?? null,
+        programme: user.memberships[0]?.programme ?? null,
+      },
+    }));
   }
 
   findMine(organizationId: string, eventId: string, userId: string) {
@@ -179,6 +211,73 @@ export class RegistrationsService {
     if (promotedRegistrationId) {
       await this.notifications.enqueueRegistrationPromoted(organizationId, promotedRegistrationId);
     }
+    return updated;
+  }
+
+  /**
+   * Committee-initiated promotion: waitlisted (or mistakenly rejected) →
+   * APPROVED. A participant's own CANCELLED stays untouched — reversing that
+   * is the participant's decision, not the committee's.
+   *
+   * Capacity is enforced here exactly as it is on the register path (row lock
+   * → count → decide), so the approved count can never exceed the cap through
+   * this door either.
+   */
+  async approve(organizationId: string, registrationId: string, actorUserId?: string) {
+    let updated;
+    try {
+      updated = await this.prisma.$transaction(async (tx) => {
+        const current = await tx.registration.findFirst({ where: { id: registrationId, organizationId } });
+        if (!current) throw new NotFoundException('Registration not found in this organization');
+        if (current.status === 'APPROVED') throw new ConflictException('Registration is already approved');
+        if (current.status === 'CANCELLED') {
+          throw new ConflictException('This registrant cancelled their own place — they need to register again');
+        }
+
+        // Same lock ordering as register(): serialize per event before counting.
+        await tx.$queryRaw`SELECT id FROM "Event" WHERE id = ${current.eventId} FOR UPDATE`;
+        const event = await tx.event.findFirst({
+          where: { id: current.eventId, organizationId },
+          select: { capacity: true },
+        });
+        if (!event) throw new NotFoundException('Event not found in this organization');
+
+        if (event.capacity !== null) {
+          const approvedCount = await tx.registration.count({
+            where: { eventId: current.eventId, organizationId, status: 'APPROVED' },
+          });
+          if (approvedCount >= event.capacity) {
+            throw new ConflictException(
+              `Event is at capacity (${event.capacity}). Raise the capacity or reject an approved registration first.`,
+            );
+          }
+        }
+
+        const row = await tx.registration.update({
+          where: { id: registrationId, organizationId, status: current.status },
+          data: { status: 'APPROVED' },
+        });
+
+        await this.attendance.createForRegistration(tx, {
+          registrationId, eventId: current.eventId, organizationId,
+        });
+
+        await this.audit.record({
+          organizationId, actorUserId, action: 'registration.approve',
+          targetType: 'Registration', targetId: registrationId,
+          metadata: { registrationId, eventId: current.eventId, from: current.status, to: 'APPROVED' },
+        }, tx);
+
+        return row;
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+        throw new ConflictException('Registration was modified concurrently — please retry');
+      }
+      throw error;
+    }
+
+    await this.notifications.enqueueRegistrationPromoted(organizationId, registrationId);
     return updated;
   }
 

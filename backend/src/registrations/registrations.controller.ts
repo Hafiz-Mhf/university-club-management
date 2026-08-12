@@ -56,6 +56,18 @@ export class RegistrationsController {
 
   @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
   @Roles(...MANAGE_EVENTS)
+  @Post(':registrationId/approve')
+  @HttpCode(200)
+  approve(
+    @OrgId() orgId: string,
+    @Param('registrationId') registrationId: string,
+    @CurrentUser() user: { userId: string },
+  ) {
+    return this.registrations.approve(orgId, registrationId, user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard, TenantGuard, RolesGuard)
+  @Roles(...MANAGE_EVENTS)
   @Post(':registrationId/reject')
   @HttpCode(200)
   reject(

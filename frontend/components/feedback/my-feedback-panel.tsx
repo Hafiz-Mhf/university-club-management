@@ -2,9 +2,11 @@
 
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Textarea } from '@/components/ui/textarea';
 import { RatingScale } from '@/components/feedback/rating-scale';
 import { useMyAttendance } from '@/features/attendance/use-attendance';
@@ -18,7 +20,11 @@ export function MyFeedbackPanel({ orgId, event }: { orgId: string; event: Event 
   const attendance = useMyAttendance(orgId, event.id);
   const feedback = useMyFeedback(orgId, event.id);
 
-  if (attendance.isPending || feedback.isPending) return null;
+  // Unreachable under MyEventPanels, which gates on these same queries — kept
+  // so a standalone mount shows a placeholder rather than nothing.
+  if (attendance.isPending || feedback.isPending) {
+    return <Skeleton role="status" aria-label="Loading your feedback" className="h-9 w-64" />;
+  }
 
   const state = resolveFeedbackPanelState(attendance.data?.status, feedback.data, event, new Date());
 
@@ -63,7 +69,13 @@ function FeedbackForm({ orgId, eventId }: { orgId: string; eventId: string }) {
 
   return (
     <form
-      onSubmit={form.handleSubmit((values) => submit.mutate(values))}
+      onSubmit={form.handleSubmit((values) =>
+        submit.mutate(values, {
+          // The form is replaced by the recap on success — confirm the write
+          // landed rather than leaving the swap to speak for itself.
+          onSuccess: () => toast.success('Thanks — your feedback was submitted'),
+        }),
+      )}
       className="flex flex-col gap-4 rounded-lg border border-border p-3"
       noValidate
     >

@@ -2,6 +2,7 @@
 
 import { use, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { ArrowLeft, CalendarDays, MapPin, Pencil, Users } from 'lucide-react';
 import { Button, buttonVariants } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -9,9 +10,7 @@ import { EventNotFound } from '@/components/events/event-not-found';
 import { EventStatusBadge } from '@/components/events/event-status-badge';
 import { LifecycleActions } from '@/components/events/lifecycle-actions';
 import { eventDateRange } from '@/components/events/event-card';
-import { MyCertificatePanel } from '@/components/certificates/my-certificate-panel';
-import { MyFeedbackPanel } from '@/components/feedback/my-feedback-panel';
-import { MyRegistrationPanel } from '@/components/registrations/my-registration-panel';
+import { MyEventPanels } from '@/components/events/my-event-panels';
 import { RegistrationFormEditor } from '@/components/registrations/registration-form-editor';
 import { RegistrationsTable } from '@/components/registrations/registrations-table';
 import { useEvent } from '@/features/events/use-events';
@@ -36,7 +35,12 @@ export default function EventDetailPage({
   const { eventId } = use(params);
   const { org, membership } = useOrg();
   const event = useEvent(org.id, eventId);
-  const [tab, setTab] = useState<Tab>('overview');
+  // The dashboard's waitlist rows link straight at ?tab=registrations, which is
+  // where the approve action lives.
+  const requestedTab = useSearchParams().get('tab');
+  const [tab, setTab] = useState<Tab>(
+    TABS.some((t) => t.id === requestedTab) ? (requestedTab as Tab) : 'overview',
+  );
   const committee = isCommittee(membership.role);
 
   if (event.isPending) {
@@ -91,10 +95,18 @@ export default function EventDetailPage({
       </div>
 
       {committee && (
-        <div className="flex w-fit flex-wrap rounded-md border border-border p-0.5">
+        <div
+          role="tablist"
+          aria-label="Event sections"
+          className="flex w-fit flex-wrap rounded-md border border-border p-0.5"
+        >
           {TABS.map((t) => (
             <Button
               key={t.id}
+              role="tab"
+              id={`event-tab-${t.id}`}
+              aria-selected={tab === t.id}
+              aria-controls={`event-panel-${t.id}`}
               variant="ghost"
               size="sm"
               onClick={() => setTab(t.id)}
@@ -107,7 +119,12 @@ export default function EventDetailPage({
       )}
 
       {(tab === 'overview' || !committee) && (
-        <>
+        <div
+          id="event-panel-overview"
+          role={committee ? 'tabpanel' : undefined}
+          aria-labelledby={committee ? 'event-tab-overview' : undefined}
+          className="flex flex-col gap-5"
+        >
           <div className="flex flex-col gap-2 text-sm text-foreground-muted">
             <span className="flex items-center gap-2">
               <CalendarDays className="size-4" />
@@ -129,18 +146,22 @@ export default function EventDetailPage({
             <p className="text-sm leading-relaxed whitespace-pre-wrap">{e.description}</p>
           )}
 
-          <MyRegistrationPanel orgId={org.id} event={e} />
-
-          <MyCertificatePanel orgId={org.id} eventId={e.id} />
-
-          <MyFeedbackPanel orgId={org.id} event={e} />
+          <MyEventPanels orgId={org.id} event={e} />
 
           <LifecycleActions event={e} orgId={org.id} orgSlug={org.slug} role={membership.role} />
-        </>
+        </div>
       )}
 
-      {committee && tab === 'form' && <RegistrationFormEditor orgId={org.id} event={e} />}
-      {committee && tab === 'registrations' && <RegistrationsTable orgId={org.id} event={e} />}
+      {committee && tab === 'form' && (
+        <div id="event-panel-form" role="tabpanel" aria-labelledby="event-tab-form">
+          <RegistrationFormEditor orgId={org.id} event={e} />
+        </div>
+      )}
+      {committee && tab === 'registrations' && (
+        <div id="event-panel-registrations" role="tabpanel" aria-labelledby="event-tab-registrations">
+          <RegistrationsTable orgId={org.id} event={e} />
+        </div>
+      )}
     </main>
   );
 }

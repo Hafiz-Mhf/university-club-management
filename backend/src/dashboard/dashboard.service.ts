@@ -45,6 +45,7 @@ export class DashboardService {
           userId: true,
           createdAt: true,
           event: { select: { title: true } },
+          user: { select: { fullName: true } },
         },
         orderBy: { createdAt: 'asc' },
         take: PENDING_APPROVALS_LIMIT,
@@ -58,6 +59,7 @@ export class DashboardService {
           status: true,
           createdAt: true,
           event: { select: { title: true } },
+          user: { select: { fullName: true } },
         },
         orderBy: { createdAt: 'desc' },
         take: RECENT_REGISTRATIONS_LIMIT,
@@ -81,6 +83,17 @@ export class DashboardService {
       }),
     ]);
 
+    // "Someone did something" is not an activity feed. Resolve the actors in one
+    // query — the feed is capped at 15 rows, so this is a single small IN.
+    const actorIds = [...new Set(activityFeed.map((a) => a.actorUserId).filter((id): id is string => !!id))];
+    const actors = actorIds.length
+      ? await this.prisma.user.findMany({
+          where: { id: { in: actorIds } },
+          select: { id: true, fullName: true },
+        })
+      : [];
+    const actorNames = new Map(actors.map((a) => [a.id, a.fullName]));
+
     return {
       kpis: { activeMembers, totalEvents, activeRegistrations, certificatesIssued },
       upcomingEvents: upcomingEventsRaw.map((e) => ({
@@ -95,6 +108,7 @@ export class DashboardService {
         eventId: r.eventId,
         eventTitle: r.event.title,
         userId: r.userId,
+        userName: r.user.fullName,
         createdAt: r.createdAt,
       })),
       recentRegistrations: recentRegistrationsRaw.map((r) => ({
@@ -102,10 +116,14 @@ export class DashboardService {
         eventId: r.eventId,
         eventTitle: r.event.title,
         userId: r.userId,
+        userName: r.user.fullName,
         status: r.status,
         createdAt: r.createdAt,
       })),
-      activityFeed,
+      activityFeed: activityFeed.map((entry) => ({
+        ...entry,
+        actorName: entry.actorUserId ? (actorNames.get(entry.actorUserId) ?? null) : null,
+      })),
     };
   }
 }

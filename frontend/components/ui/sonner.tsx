@@ -1,15 +1,18 @@
 "use client"
 
-import { useTheme } from "next-themes"
 import { Toaster as Sonner, type ToasterProps } from "sonner"
 import { CircleCheckIcon, InfoIcon, TriangleAlertIcon, OctagonXIcon, Loader2Icon } from "lucide-react"
+import { useTheme } from "@/hooks/use-theme"
 
+// Stock shadcn wires this to next-themes; this app has its own theme store
+// (hooks/use-theme), so read the preference from there or the toast would
+// ignore the in-app theme toggle entirely.
 const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme = "system" } = useTheme()
+  const preference = useTheme((state) => state.preference)
 
   return (
     <Sonner
-      theme={theme as ToasterProps["theme"]}
+      theme={preference}
       className="toaster group"
       icons={{
         success: (

@@ -17,7 +17,7 @@ export function AdvisorsFields({ errors }: { errors: FieldErrors<OrgProfileFormV
       {advisors.fields.map((f, index) => (
         <div key={f.id} className="flex items-start gap-2">
           <Input placeholder="Advisor name" className="flex-1" {...register(`advisors.${index}.name`)} />
-          <Button type="button" variant="ghost" size="icon-sm" onClick={() => advisors.remove(index)} aria-label="Remove advisor">
+          <Button type="button" variant="ghost" size="icon" onClick={() => advisors.remove(index)} aria-label="Remove advisor">
             <X className="size-4" />
           </Button>
         </div>

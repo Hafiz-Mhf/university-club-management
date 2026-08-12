@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
-import type { Event } from '@/types/api';
+import type { Event, EventListItem } from '@/types/api';
 import type { EventFormInput } from '@/features/events/schemas';
 
 function toBody(input: EventFormInput) {
@@ -20,7 +20,7 @@ function toBody(input: EventFormInput) {
 export function useEvents(orgId: string) {
   return useQuery({
     queryKey: ['org', orgId, 'events'],
-    queryFn: () => api<Event[]>(`/organizations/${orgId}/events`),
+    queryFn: () => api<EventListItem[]>(`/organizations/${orgId}/events`),
   });
 }
 

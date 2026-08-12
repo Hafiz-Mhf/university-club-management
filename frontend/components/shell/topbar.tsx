@@ -7,16 +7,19 @@ import { buttonVariants } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
 import { SidebarNav } from '@/components/shell/sidebar';
-import { NAV_ITEMS } from '@/components/shell/nav-items';
+import { NAV_ITEMS, navLabel } from '@/components/shell/nav-items';
 import { useOrg } from '@/features/orgs/org-provider';
+import { isCommittee } from '@/features/orgs/roles';
 
 export function Topbar() {
   const pathname = usePathname();
-  const { org } = useOrg();
+  const { org, membership } = useOrg();
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const segment = pathname.split('/').filter(Boolean)[1] ?? '';
-  const current = NAV_ITEMS.find((i) => i.segment === segment)?.label ?? 'Dashboard';
+  const item = NAV_ITEMS.find((i) => i.segment === segment);
+  // Breadcrumb must match the heading the page actually renders for this role.
+  const current = item ? navLabel(item, isCommittee(membership.role)) : 'Dashboard';
 
   return (
     <header className="flex h-14 items-center gap-3 border-b border-border bg-background px-4">

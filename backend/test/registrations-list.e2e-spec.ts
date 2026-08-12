@@ -9,6 +9,7 @@ describe('List + read own registration (e2e)', () => {
   let orgId: string;
   let eventId: string;
   let partToken: string;
+  let partEmail: string;
   const pres = `rl-${Date.now()}@test.io`;
   const future = (d: number) => new Date(Date.now() + d * 86400000).toISOString();
 
@@ -26,8 +27,8 @@ describe('List + read own registration (e2e)', () => {
     await request(app.getHttpServer()).post(`/organizations/${orgId}/events/${eventId}/publish`)
       .set('Authorization', `Bearer ${presToken}`).expect(200);
 
-    const partEmail = `part-${Date.now()}@test.io`;
-    await request(app.getHttpServer()).post('/auth/register').send({ email: partEmail, password: 'password123', fullName: partEmail, consent: true });
+    partEmail = `part-${Date.now()}@test.io`;
+    await request(app.getHttpServer()).post('/auth/register').send({ email: partEmail, password: 'password123', fullName: 'Registrant Name', consent: true });
     partToken = (await request(app.getHttpServer()).post('/auth/login').send({ email: partEmail, password: 'password123' })).body.accessToken;
     await request(app.getHttpServer()).post(`/organizations/${orgId}/events/${eventId}/registrations`)
       .set('Authorization', `Bearer ${partToken}`).send({}).expect(201);
@@ -39,6 +40,26 @@ describe('List + read own registration (e2e)', () => {
       .get(`/organizations/${orgId}/events/${eventId}/registrations`)
       .set('Authorization', `Bearer ${presToken}`).expect(200);
     expect(res.body).toHaveLength(1);
+  });
+
+  it('the listed registration names the registrant, so the committee can act on it', async () => {
+    const res = await request(app.getHttpServer())
+      .get(`/organizations/${orgId}/events/${eventId}/registrations`)
+      .set('Authorization', `Bearer ${presToken}`).expect(200);
+    expect(res.body[0].user).toEqual({
+      id: expect.any(String),
+      fullName: 'Registrant Name',
+      email: partEmail,
+      studentId: null,
+      programme: null,
+    });
+  });
+
+  it('never exposes the registrant password hash', async () => {
+    const res = await request(app.getHttpServer())
+      .get(`/organizations/${orgId}/events/${eventId}/registrations`)
+      .set('Authorization', `Bearer ${presToken}`).expect(200);
+    expect(JSON.stringify(res.body)).not.toContain('passwordHash');
   });
 
   it('a participant cannot list all registrations (403)', async () => {

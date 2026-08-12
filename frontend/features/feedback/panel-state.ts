@@ -5,7 +5,8 @@ export type FeedbackPanelState = 'hidden' | 'recap' | 'form' | 'window-closed';
 
 export function resolveFeedbackPanelState(
   attendanceStatus: AttendanceStatus | undefined,
-  feedback: FeedbackResponse | undefined,
+  // null is what the API returns for "not submitted yet" (see apiOrNull).
+  feedback: FeedbackResponse | null | undefined,
   event: Event,
   now: Date,
 ): FeedbackPanelState {

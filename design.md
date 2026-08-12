@@ -65,8 +65,16 @@ without touching anything else.
 | `surface-secondary` (sidebar) | `#F3F2EE` | `#131216` | sidebar sits one step *darker* than canvas in dark mode — grounds the shell (Linear pattern) |
 | `border` | `#E7E5E0` | `#2C2A30` | |
 | `foreground` | `#201F1C` | `#F2F1EE` | warm near-black / warm off-white, never pure `#000`/`#FFF` |
-| `foreground-muted` | `#6B6862` | `#A8A5A0` | |
-| `foreground-subtle` | `#8F8C85` | `#78756F` | placeholder text, disabled labels |
+| `foreground-muted` | `#5F5C57` | `#B5B2AC` | |
+| `foreground-subtle` | `#6F6C66` | `#918D86` | placeholder text, disabled labels, timestamps |
+
+Both greys are verified at **≥4.5:1 against `surface`, `background` AND
+`surface-secondary`** in both themes — the tightest of the three, not just the
+page background. The original pair (`#8F8C85` light / `#78756F` dark) measured
+3.1–3.9:1 while carrying every timestamp, placeholder and helper line in the
+product, so the system was breaking its own accessibility baseline everywhere
+at once. Any future change to these two values must be re-measured against all
+three surfaces before it lands.
 
 ### Platform default brand (org-overridable)
 
@@ -97,6 +105,32 @@ Each domain hue appears at **10–15% opacity as a tag background** at most
 (e.g. `rgba(124,92,252,0.10)` light / `rgba(155,133,255,0.16)` dark behind a
 full-opacity icon or text) — never as a full-saturation panel or card
 background.
+
+### Chart series palette
+
+Charts are the one surface where color carries meaning rather than decoration,
+so they get their own tokens instead of borrowing domain hues at fill strength.
+All values sit in the same lightness band in both themes, so no series shouts
+louder than another.
+
+| Token | Light | Dark | Used on |
+|---|---|---|---|
+| `chart-1` | `#3F9142` | same | member growth, committee activity |
+| `chart-2` | `#2F7DE1` | same | registration trend, faculty demographics |
+| `chart-3` | `#B8860B` | same | programme demographics, ratings (venue) |
+| `chart-4` | `--domain-certificates` | ↑ | reserved |
+| `chart-5` | `--domain-analytics` | ↑ | reserved |
+| `chart-feedback` | `#E1487D` | `#F06B9B` | NPS trend |
+
+**One hue per chart, assigned by what the chart is about** — a single-series
+chart in a rainbow is decoration, and six charts in one green (the v1 state)
+made the whole page unreadable at a glance. `chart-1..3` are literal hex in
+both themes on purpose: the dark variants of the matching domain hues fail the
+chart lightness band.
+
+Bar charts size their height to their row count (`rows × ~34px`) and set
+`interval={0}`, because Recharts silently drops y-axis ticks at a fixed height
+— nine bars rendering five labels means four bars belong to nobody.
 
 ### Semantic status (standard, predictable — never repurposed)
 

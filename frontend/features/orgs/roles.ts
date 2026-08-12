@@ -1,5 +1,18 @@
 import type { MembershipRole } from '@/types/api';
 
+/** Human-readable role name, shared by every surface that names a role. */
+export const ROLE_LABELS: Record<MembershipRole, string> = {
+  PRESIDENT: 'President',
+  VICE_PRESIDENT: 'Vice President',
+  SECRETARY: 'Secretary',
+  TREASURER: 'Treasurer',
+  EVENT_DIRECTOR: 'Event Director',
+  COMMITTEE: 'Committee',
+  VOLUNTEER: 'Volunteer',
+  PARTICIPANT: 'Participant',
+  ADVISOR: 'Advisor',
+};
+
 // Mirrors backend/src/rbac/role-groups.ts MANAGE_EVENTS — the committee tier
 // that can see org-management surfaces (dashboard, member lists, analytics).
 export const COMMITTEE_ROLES: MembershipRole[] = [

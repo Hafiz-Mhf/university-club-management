@@ -63,6 +63,30 @@ describe('Events CRUD (e2e)', () => {
     expect(asMember.body.map((e: { id: string }) => e.id)).not.toContain(draftId);
   });
 
+  it('lists how full each event is, so the committee can triage without opening it', async () => {
+    const created = await request(app.getHttpServer()).post(`/organizations/${orgId}/events`)
+      .set('Authorization', `Bearer ${presToken}`)
+      .send({ title: 'Counted Event', startAt: future(12), endAt: future(13), capacity: 1 }).expect(201);
+    await request(app.getHttpServer()).post(`/organizations/${orgId}/events/${created.body.id}/publish`)
+      .set('Authorization', `Bearer ${presToken}`).expect(200);
+
+    for (const suffix of ['a', 'b']) {
+      const email = `cnt-${suffix}-${Date.now()}@test.io`;
+      await request(app.getHttpServer()).post('/auth/register').send({ email, password: 'password123', fullName: email, consent: true });
+      const token = (await request(app.getHttpServer()).post('/auth/login').send({ email, password: 'password123' })).body.accessToken;
+      await request(app.getHttpServer()).post(`/organizations/${orgId}/events/${created.body.id}/registrations`)
+        .set('Authorization', `Bearer ${token}`).send({}).expect(201);
+    }
+
+    const list = await request(app.getHttpServer()).get(`/organizations/${orgId}/events`)
+      .set('Authorization', `Bearer ${presToken}`).expect(200);
+    const row = list.body.find((e: { id: string }) => e.id === created.body.id);
+    expect(row.approvedCount).toBe(1);
+    expect(row.waitlistedCount).toBe(1);
+    // No feedback yet — the picker needs a real 0, not undefined.
+    expect(row.feedbackCount).toBe(0);
+  });
+
   it('non-manager gets 404 reading a DRAFT by id', async () => {
     await request(app.getHttpServer()).get(`/organizations/${orgId}/events/${draftId}`)
       .set('Authorization', `Bearer ${memberToken}`).expect(404);

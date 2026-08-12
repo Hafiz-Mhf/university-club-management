@@ -1,6 +1,6 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, apiUpload } from '@/lib/api';
 import type { FileCategory, OrgFile } from '@/types/api';
 
@@ -15,6 +15,9 @@ export function useFiles(orgId: string, category?: FileCategory) {
       const qs = category ? `?category=${category}` : '';
       return api<OrgFile[]>(`${base(orgId)}${qs}`);
     },
+    // The category filter is part of the key — hold the current files while the
+    // new category loads rather than blanking the tab.
+    placeholderData: keepPreviousData,
   });
 }
 

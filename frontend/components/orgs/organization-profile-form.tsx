@@ -1,8 +1,10 @@
 'use client';
 
+import { useEffect } from 'react';
 import { FormProvider, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -55,6 +57,12 @@ export function OrganizationProfileForm({
   });
   const errors = form.formState.errors;
 
+  // A green "Saved." bar with no dismissal stayed on screen while the user kept
+  // editing, claiming a save that no longer matched the form.
+  useEffect(() => {
+    if (update.isSuccess) toast.success('Profile saved');
+  }, [update.isSuccess]);
+
   const onSubmit = form.handleSubmit((values) => {
     update.mutate({
       name: values.name,
@@ -82,15 +90,11 @@ export function OrganizationProfileForm({
             {update.error instanceof ApiError ? update.error.message : 'Something went wrong'}
           </p>
         )}
-        {update.isSuccess && (
-          <p className="rounded-md bg-success/10 px-3 py-2 text-sm text-success">Saved.</p>
-        )}
-
         <Field label="Name" htmlFor="org-name" error={errors.name?.message}>
-          <Input id="org-name" {...form.register('name')} />
+          <Input id="org-name" className="max-w-md" {...form.register('name')} />
         </Field>
         <Field label="Description" htmlFor="org-description" error={errors.description?.message}>
-          <Textarea id="org-description" rows={4} {...form.register('description')} />
+          <Textarea id="org-description" rows={4} className="max-w-xl" {...form.register('description')} />
         </Field>
 
         <SocialLinksFields errors={errors} />

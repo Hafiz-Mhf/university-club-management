@@ -44,12 +44,43 @@ export class EventsService {
     });
   }
 
-  list(organizationId: string, actorRole: Role) {
+  /**
+   * Rows carry their own headcount (approved vs waitlisted) and feedback
+   * response count, so the list — and the attendance/certificate/feedback
+   * pickers built on it — can answer "which event needs attention" without
+   * opening each one. Two grouped queries, not N+1 per row.
+   */
+  async list(organizationId: string, actorRole: Role) {
     const canManage = MANAGE_EVENTS.includes(actorRole);
-    return this.prisma.event.findMany({
+    const events = await this.prisma.event.findMany({
       where: { organizationId, ...(canManage ? {} : { status: { not: 'DRAFT' } }) },
       orderBy: { startAt: 'desc' },
     });
+    if (events.length === 0) return [];
+
+    const eventIds = events.map((e) => e.id);
+    const [counts, feedbackCounts] = await Promise.all([
+      this.prisma.registration.groupBy({
+        by: ['eventId', 'status'],
+        where: { organizationId, eventId: { in: eventIds } },
+        _count: { _all: true },
+      }),
+      this.prisma.feedbackResponse.groupBy({
+        by: ['eventId'],
+        where: { organizationId, eventId: { in: eventIds } },
+        _count: { _all: true },
+      }),
+    ]);
+
+    const countFor = (eventId: string, status: 'APPROVED' | 'WAITLISTED') =>
+      counts.find((c) => c.eventId === eventId && c.status === status)?._count._all ?? 0;
+
+    return events.map((event) => ({
+      ...event,
+      approvedCount: countFor(event.id, 'APPROVED'),
+      waitlistedCount: countFor(event.id, 'WAITLISTED'),
+      feedbackCount: feedbackCounts.find((f) => f.eventId === event.id)?._count._all ?? 0,
+    }));
   }
 
   listPublicUpcoming(organizationId: string) {

@@ -33,3 +33,35 @@ export function contrastRatio(a: string, b: string): number {
 export function meetsBrandContrast(color: string, theme: 'light' | 'dark'): boolean {
   return contrastRatio(color, CANVAS[theme]) >= MIN_RATIO;
 }
+
+export interface BrandContrastReport {
+  light: number;
+  dark: number;
+  meetsLight: boolean;
+  meetsDark: boolean;
+  /** Themes where this color will be silently ignored in favour of the default. */
+  failingThemes: ('light' | 'dark')[];
+}
+
+/**
+ * Both themes at once, for the colour picker. The provider applies a brand
+ * color only where it clears {@link MIN_RATIO}, so the form has to be able to
+ * say *which* theme will drop it — otherwise "Saved." is the only feedback for
+ * a change that does nothing.
+ */
+export function brandContrastReport(color: string): BrandContrastReport {
+  const light = contrastRatio(color, CANVAS.light);
+  const dark = contrastRatio(color, CANVAS.dark);
+  const meetsLight = light >= MIN_RATIO;
+  const meetsDark = dark >= MIN_RATIO;
+  return {
+    light,
+    dark,
+    meetsLight,
+    meetsDark,
+    failingThemes: [
+      ...(meetsLight ? [] : (['light'] as const)),
+      ...(meetsDark ? [] : (['dark'] as const)),
+    ],
+  };
+}

@@ -1,5 +1,6 @@
 'use client';
 
+import { Refreshing } from '@/components/ui/refreshing';
 import { Skeleton } from '@/components/ui/skeleton';
 import { usePublicGallery } from '@/features/public/use-public-club';
 
@@ -21,7 +22,11 @@ export function PublicGalleryGrid({ orgSlug }: { orgSlug: string }) {
         <p className="text-sm text-foreground-muted">No photos yet.</p>
       )}
       {gallery.data && gallery.data.length > 0 && (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <Refreshing
+          active={gallery.isFetching}
+          label="Refreshing gallery"
+          className="grid grid-cols-2 gap-2 sm:grid-cols-3"
+        >
           {gallery.data.map((photo) => (
             <a
               key={photo.id}
@@ -34,7 +39,7 @@ export function PublicGalleryGrid({ orgSlug }: { orgSlug: string }) {
               <img src={photo.downloadUrl} alt={photo.caption ?? 'Gallery photo'} className="h-full w-full object-cover" />
             </a>
           ))}
-        </div>
+        </Refreshing>
       )}
     </section>
   );

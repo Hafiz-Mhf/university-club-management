@@ -346,7 +346,41 @@ Organization 1─* AuditLog
 
 ---
 
-## 5. Phase 2+ Additions (not built yet)
+## 5. Demo / development seed
+
+`backend/prisma/seed.ts` (`npm run prisma:seed`) builds a realistic two-org
+dataset for development, demos and UX review. **No schema involvement** — it
+writes through the ordinary models only, and it refuses to run with
+`NODE_ENV=production`.
+
+- **Idempotent by design:** each run deletes everything belonging to the demo
+  slugs (`tech-innovators`, `photography-club`) in FK-safe order, then
+  rebuilds. Re-running is the supported way to reset demo state.
+- **Users are upserted, not wiped** — the two orgs deliberately share several
+  users so the org switcher and cross-tenant isolation are both exercisable
+  from one login. Deleting a `User` would break rows in other orgs.
+- **Writes mirror service invariants rather than bypassing them:** every
+  `Registration` gets its own `ConsentRecord` (purpose `event-registration`)
+  in keeping with the PDPA rule, and only `APPROVED` registrations receive an
+  `Attendance` row — the same split `RegistrationsService.register()` makes.
+- **Runs against a raw `PrismaClient`**, so the tenant-scope middleware in
+  `PrismaService` does not apply. That is intentional for a seeder and is the
+  reason it must never be wired into application code.
+- **Feedback is seeded across three completed events** (29 responses total,
+  9–12 per event, roughly two-thirds carrying a written comment) and only ever
+  from attendees marked `PRESENT` — the same precondition the real submit path
+  enforces. Spreading it over events ~42, ~21 and ~7 days back is deliberate:
+  a single event's worth of feedback renders the NPS/ratings trends as two
+  unconnected dots, which reads as a broken chart rather than sparse data.
+- Not seeded: `Certificate`, `OrgFile`, `GalleryPhoto`. Each needs a real
+  object in MinIO, and a row pointing at a missing key is worse than no row —
+  downloads would 404. Certificates are instead reachable through the product:
+  one seeded event is left PUBLISHED-but-finished with attendance and feedback
+  already in, so completing it triggers real generation.
+
+---
+
+## 6. Phase 2+ Additions (not built yet)
 
 Budget, Sponsor, Payment — each org-scoped, added when their phase lands.
 Keep this doc synced as models are implemented.

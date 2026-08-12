@@ -20,6 +20,8 @@ import { relativeTime } from '@/features/dashboard/format';
 import { ApiError } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import type { AttendanceStatus } from '@/types/api';
+import { Refreshing } from '@/components/ui/refreshing';
+import { SkeletonList } from '@/components/ui/skeleton-list';
 
 type StatusFilter = 'all' | AttendanceStatus;
 const FILTERS: StatusFilter[] = ['all', 'REGISTERED', 'PRESENT', 'ABSENT'];
@@ -45,7 +47,7 @@ export function AttendanceRoster({ orgId, eventId }: { orgId: string; eventId: s
     [attendance.data, statusFilter],
   );
 
-  if (attendance.isPending) return null;
+  if (attendance.isPending) return <SkeletonList rows={5} label="Loading attendance" />;
   if (attendance.isError) {
     return <p className="text-sm text-foreground-muted">Couldn&apos;t load attendance.</p>;
   }
@@ -76,7 +78,11 @@ export function AttendanceRoster({ orgId, eventId }: { orgId: string; eventId: s
           {statusFilter === 'all' ? 'No one registered yet.' : 'No one matches this filter.'}
         </p>
       ) : (
-        <div className="flex flex-col gap-2">
+        <Refreshing
+          active={attendance.isFetching}
+          label="Refreshing attendance"
+          className="flex flex-col gap-2"
+        >
           {filtered.map((a) => {
             // This roster is open to VOLUNTEERs, but GET /registrations and
             // GET /members are MANAGE_EVENTS-gated — a 403 here is an expected
@@ -108,7 +114,7 @@ export function AttendanceRoster({ orgId, eventId }: { orgId: string; eventId: s
               </div>
             );
           })}
-        </div>
+        </Refreshing>
       )}
 
       <Dialog open={markingAbsent !== null} onOpenChange={(open) => !open && setMarkingAbsent(null)}>

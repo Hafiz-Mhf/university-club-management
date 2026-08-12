@@ -5,17 +5,23 @@ import Link from 'next/link';
 import { Search, UserPlus } from 'lucide-react';
 import { buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Skeleton } from '@/components/ui/skeleton';
 import { MemberRoleBadge } from '@/components/members/member-role-badge';
 import { MemberStatusBadge } from '@/components/members/member-status-badge';
 import { useMembers } from '@/features/members/use-members';
 import { relativeTime } from '@/features/dashboard/format';
 import { useOrg } from '@/features/orgs/org-provider';
-import { canManageMembers } from '@/features/orgs/roles';
+import { canManageMembers, isCommittee } from '@/features/orgs/roles';
 import type { MemberStatus, MembershipRole } from '@/types/api';
+import { Refreshing } from '@/components/ui/refreshing';
+import { SkeletonList } from '@/components/ui/skeleton-list';
 
 type RoleFilter = 'all' | MembershipRole;
 type StatusFilter = 'all' | MemberStatus;
+
+const GROUPS = [
+  { id: 'committee', heading: 'Committee' },
+  { id: 'members', heading: 'Members & volunteers' },
+] as const;
 
 const ROLE_OPTIONS: MembershipRole[] = [
   'PRESIDENT', 'VICE_PRESIDENT', 'SECRETARY', 'TREASURER', 'EVENT_DIRECTOR',
@@ -49,7 +55,14 @@ export default function MembersPage() {
   return (
     <main className="mx-auto flex w-full max-w-4xl flex-col gap-4 p-4 lg:p-6">
       <div className="flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold">Members</h1>
+        <h1 className="text-2xl font-semibold">
+          Members
+          {members.data && (
+            <span className="ml-2 text-base font-normal text-foreground-muted tabular-nums">
+              {members.data.length}
+            </span>
+          )}
+        </h1>
         {canAdd && (
           <Link href={`/${org.slug}/members/new`} className={buttonVariants()}>
             <UserPlus className="size-4" />
@@ -95,11 +108,7 @@ export default function MembersPage() {
       </div>
 
       {members.isPending && (
-        <div className="flex flex-col gap-2">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={i} className="h-16 rounded-lg" />
-          ))}
-        </div>
+        <SkeletonList rows={4} rowClassName="h-16" label="Loading members" />
       )}
 
       {members.isError && (
@@ -114,27 +123,48 @@ export default function MembersPage() {
         </p>
       )}
 
-      <div className="flex flex-col gap-2">
-        {filtered.map((m) => (
-          <Link
-            key={m.id}
-            href={`/${org.slug}/members/${m.id}`}
-            className="flex items-center justify-between gap-3 rounded-lg border border-border p-3 transition-colors hover:border-primary/40"
-          >
-            <div className="flex flex-col gap-0.5">
-              <span className="text-sm font-medium">{m.user.fullName}</span>
-              <span className="text-xs text-foreground-muted">{m.user.email}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <MemberRoleBadge role={m.role} />
-              <MemberStatusBadge status={m.status} />
-              <span className="hidden text-xs text-foreground-subtle sm:inline">
-                {relativeTime(m.joinedAt)}
-              </span>
-            </div>
-          </Link>
-        ))}
-      </div>
+      {/* Committee is split out because it is the org's central artifact — who
+          holds which office is the thing handover, minutes and RBAC all hang
+          off, and it was previously just the first few rows of one long list. */}
+      <Refreshing
+        active={members.isFetching && !members.isPending}
+        label="Refreshing members"
+        className="flex flex-col gap-6"
+      >
+        {GROUPS.map(({ id, heading }) => {
+          const rows = filtered.filter((m) => (id === 'committee' ? isCommittee(m.role) : !isCommittee(m.role)));
+          if (rows.length === 0) return null;
+          return (
+            <section key={id} className="flex flex-col gap-2">
+              <h2 className="text-xs font-medium tracking-wide text-foreground-muted uppercase">
+                {heading}
+                <span className="ml-1.5 tabular-nums">{rows.length}</span>
+              </h2>
+              {rows.map((m) => (
+                <Link
+                  key={m.id}
+                  href={`/${org.slug}/members/${m.id}`}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-border p-3 transition-colors hover:border-primary/40"
+                >
+                  <div className="flex min-w-0 flex-col gap-0.5">
+                    <span className="truncate text-sm font-medium">{m.user.fullName}</span>
+                    <span className="truncate text-xs text-foreground-muted">
+                      {[m.studentId, m.programme ?? m.faculty].filter(Boolean).join(' · ') || m.user.email}
+                    </span>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <MemberRoleBadge role={m.role} />
+                    {m.status === 'ALUMNI' && <MemberStatusBadge status={m.status} />}
+                    <span className="hidden w-24 text-right text-xs text-foreground-subtle sm:inline">
+                      {relativeTime(m.joinedAt)}
+                    </span>
+                  </div>
+                </Link>
+              ))}
+            </section>
+          );
+        })}
+      </Refreshing>
     </main>
   );
 }

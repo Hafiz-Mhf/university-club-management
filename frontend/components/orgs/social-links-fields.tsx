@@ -15,12 +15,16 @@ export function SocialLinksFields({ errors }: { errors: FieldErrors<OrgProfileFo
     <div className="flex flex-col gap-2">
       <Label>Social links</Label>
       {links.fields.map((f, index) => (
-        <div key={f.id} className="flex items-start gap-2">
-          <Input placeholder="Platform (e.g. instagram)" className="w-40" {...register(`socialLinks.${index}.key`)} />
-          <Input placeholder="URL" className="flex-1" {...register(`socialLinks.${index}.value`)} />
-          <Button type="button" variant="ghost" size="icon-sm" onClick={() => links.remove(index)} aria-label="Remove social link">
-            <X className="size-4" />
-          </Button>
+        // Three controls on one row squeezed the URL field to ~110px on a
+        // phone. Stack until there's room for them to sit side by side.
+        <div key={f.id} className="flex flex-col gap-2 sm:flex-row sm:items-start">
+          <Input placeholder="Platform (e.g. instagram)" className="sm:w-40" {...register(`socialLinks.${index}.key`)} />
+          <div className="flex flex-1 items-start gap-2">
+            <Input placeholder="URL" className="flex-1" {...register(`socialLinks.${index}.value`)} />
+            <Button type="button" variant="ghost" size="icon" onClick={() => links.remove(index)} aria-label="Remove social link">
+              <X className="size-4" />
+            </Button>
+          </div>
         </div>
       ))}
       {errors.socialLinks && (

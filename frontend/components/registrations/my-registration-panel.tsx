@@ -1,8 +1,10 @@
 'use client';
 
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Dialog,
   DialogContent,
@@ -15,6 +17,7 @@ import { MyQrDialog } from '@/components/attendance/my-qr-dialog';
 import { RegistrationStatusBadge } from '@/components/registrations/registration-status-badge';
 import { RegisterDialog } from '@/components/registrations/register-dialog';
 import { useCancelRegistration, useMyRegistration } from '@/features/registrations/use-registrations';
+import { statusExplanation } from '@/features/participation/status';
 import { ApiError } from '@/lib/api';
 import type { Event } from '@/types/api';
 
@@ -26,7 +29,12 @@ export function MyRegistrationPanel({ orgId, event }: { orgId: string; event: Ev
   const [qrOpen, setQrOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (myRegistration.isPending) return null;
+  // Sized to the status badge + action row this resolves into. Rendered via
+  // MyEventPanels this branch is unreachable (the parent gates on all four
+  // queries), but the panel must not blank the slot if mounted on its own.
+  if (myRegistration.isPending) {
+    return <Skeleton role="status" aria-label="Loading your registration" className="h-9 w-64" />;
+  }
 
   const registration = myRegistration.data;
 
@@ -47,6 +55,7 @@ export function MyRegistrationPanel({ orgId, event }: { orgId: string; event: Ev
   }
 
   const canCancelReg = registration.status === 'APPROVED' || registration.status === 'WAITLISTED';
+  const explanation = statusExplanation(registration.status);
 
   return (
     <div className="flex flex-col gap-2">
@@ -55,7 +64,7 @@ export function MyRegistrationPanel({ orgId, event }: { orgId: string; event: Ev
           {error}
         </p>
       )}
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <RegistrationStatusBadge status={registration.status} />
         {canCancelReg && (
           <Button variant="secondary" size="sm" onClick={() => setConfirmingCancel(true)}>
@@ -68,6 +77,10 @@ export function MyRegistrationPanel({ orgId, event }: { orgId: string; event: Ev
           </Button>
         )}
       </div>
+
+      {/* The badge alone left the most anxious state in the flow — "Waitlisted" —
+          completely unexplained. */}
+      {explanation && <p className="max-w-prose text-sm text-foreground-muted">{explanation}</p>}
 
       <Dialog open={confirmingCancel} onOpenChange={setConfirmingCancel}>
         <DialogContent>
@@ -87,7 +100,10 @@ export function MyRegistrationPanel({ orgId, event }: { orgId: string; event: Ev
               onClick={() => {
                 setError(null);
                 cancel.mutate(registration.id, {
-                  onSuccess: () => setConfirmingCancel(false),
+                  onSuccess: () => {
+                    setConfirmingCancel(false);
+                    toast.success(`Your registration for ${event.title} was cancelled`);
+                  },
                   onError: (e) => {
                     setConfirmingCancel(false);
                     setError(e instanceof ApiError ? e.message : 'Something went wrong');

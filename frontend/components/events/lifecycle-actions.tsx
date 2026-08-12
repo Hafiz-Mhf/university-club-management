@@ -60,6 +60,9 @@ export function LifecycleActions({ event, orgId, orgSlug, role }: LifecycleActio
           {actionError}
         </p>
       )}
+      {/* Forward actions and destructive ones are separated by a divider and a
+          margin: "Mark completed" and "Delete" sitting shoulder to shoulder is
+          how a mis-click ends an event. */}
       <div className="flex flex-wrap items-center gap-2">
         {showPublish && (
           <Button
@@ -85,13 +88,16 @@ export function LifecycleActions({ event, orgId, orgSlug, role }: LifecycleActio
             Mark completed
           </Button>
         )}
+        {(showCancel || showDelete) && (showPublish || showComplete) && (
+          <span aria-hidden className="mx-2 h-5 w-px bg-border" />
+        )}
         {showCancel && (
-          <Button variant="secondary" onClick={() => setConfirming('cancel')}>
+          <Button variant="ghost" className="text-foreground-muted" onClick={() => setConfirming('cancel')}>
             Cancel event
           </Button>
         )}
         {showDelete && (
-          <Button variant="destructive" onClick={() => setConfirming('delete')}>
+          <Button variant="ghost" className="text-danger" onClick={() => setConfirming('delete')}>
             Delete
           </Button>
         )}
@@ -105,8 +111,8 @@ export function LifecycleActions({ event, orgId, orgSlug, role }: LifecycleActio
             </DialogTitle>
             <DialogDescription>
               {confirming === 'cancel'
-                ? 'Registrants will be notified.'
-                : 'This cannot be undone.'}
+                ? 'The event stays on record and everyone registered is emailed that it is off. Registrations are kept, so you can still see who had signed up.'
+                : 'The event and its registrations are removed for good. If people have already signed up, cancel it instead so they are told what happened.'}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, apiUpload } from '@/lib/api';
+import { api, apiOrNull, apiUpload } from '@/lib/api';
 import type { Certificate, MyCertificate } from '@/types/api';
 
 function base(orgId: string, eventId: string) {
@@ -11,8 +11,8 @@ function base(orgId: string, eventId: string) {
 export function useMyCertificate(orgId: string, eventId: string) {
   return useQuery({
     queryKey: ['org', orgId, 'event', eventId, 'certificate', 'me'],
-    queryFn: () => api<MyCertificate>(`${base(orgId, eventId)}/me`),
-    retry: false, // a 404 here is a meaningful answer (no certificate yet), not a flake
+    // 404 = "no certificate yet", which is data. See apiOrNull.
+    queryFn: () => apiOrNull<MyCertificate>(`${base(orgId, eventId)}/me`),
   });
 }
 

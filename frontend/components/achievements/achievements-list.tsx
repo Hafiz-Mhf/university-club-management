@@ -13,6 +13,8 @@ import {
 } from '@/components/ui/dialog';
 import { useAchievements, useRemoveAchievement } from '@/features/achievements/use-achievements';
 import type { Achievement } from '@/types/api';
+import { Refreshing } from '@/components/ui/refreshing';
+import { SkeletonList } from '@/components/ui/skeleton-list';
 
 export function AchievementsList({
   orgId,
@@ -27,7 +29,7 @@ export function AchievementsList({
   const remove = useRemoveAchievement(orgId);
   const [removing, setRemoving] = useState<string | null>(null);
 
-  if (achievements.isPending) return null;
+  if (achievements.isPending) return <SkeletonList rows={3} rowClassName="h-20" label="Loading achievements" />;
   if (achievements.isError) {
     return <p className="text-sm text-foreground-muted">Couldn&apos;t load achievements.</p>;
   }
@@ -36,7 +38,11 @@ export function AchievementsList({
   }
 
   return (
-    <div className="flex flex-col gap-2">
+    <Refreshing
+      active={achievements.isFetching}
+      label="Refreshing achievements"
+      className="flex flex-col gap-2"
+    >
       {achievements.data.map((a) => (
         <div
           key={a.id}
@@ -85,6 +91,6 @@ export function AchievementsList({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </Refreshing>
   );
 }

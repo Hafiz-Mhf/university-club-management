@@ -130,6 +130,26 @@ export async function api<T = unknown>(path: string, options: ApiOptions = {}): 
   return body as T;
 }
 
+/**
+ * For "do I have one of these?" reads (my certificate, my feedback, my
+ * attendance) where the backend answers "no" with a 404. Turning that into a
+ * thrown error puts the query in an error state, and an errored query is
+ * always stale — it refetched on every remount, which on the event page meant
+ * a permanent loading skeleton and ~100 requests a second. A 404 here is an
+ * answer, so it comes back as data: null.
+ *
+ * Every other status still throws — a 403 or a 500 is a real failure and must
+ * not be silently read as "nothing here".
+ */
+export async function apiOrNull<T = unknown>(path: string, options: ApiOptions = {}): Promise<T | null> {
+  try {
+    return await api<T>(path, options);
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) return null;
+    throw error;
+  }
+}
+
 async function uploadRequest(path: string, formData: FormData, retrying: boolean): Promise<Response> {
   const headers: Record<string, string> = {};
   const accessToken = useAuthStore.getState().accessToken;

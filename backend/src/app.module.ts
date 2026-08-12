@@ -12,6 +12,7 @@ import { AttendanceModule } from './attendance/attendance.module';
 import { CertificatesModule } from './certificates/certificates.module';
 import { FeedbackModule } from './feedback/feedback.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { ParticipationModule } from './participation/participation.module';
 import { PdpaModule } from './pdpa/pdpa.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { FilesModule } from './files/files.module';
@@ -62,6 +63,7 @@ import { envValidationSchema } from './config/env.validation';
     CertificatesModule,
     FeedbackModule,
     DashboardModule,
+    ParticipationModule,
     PdpaModule,
     AnalyticsModule,
     FilesModule,

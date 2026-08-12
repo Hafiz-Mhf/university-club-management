@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 
 function base(orgId: string) {
@@ -96,6 +96,10 @@ export function useAnalyticsTrends(orgId: string, days: number) {
   return useQuery({
     queryKey: ['org', orgId, 'analytics', 'trends', days],
     queryFn: () => api<AnalyticsTrends>(`${base(orgId)}/trends?days=${days}`),
+    // The range toggle changes the key. Keep the drawn chart while the new
+    // range loads — a chart that vanishes into a grey box on every toggle
+    // makes the ranges impossible to compare.
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -110,6 +114,7 @@ export function useCommitteeActivity(orgId: string, days: number) {
   return useQuery({
     queryKey: ['org', orgId, 'analytics', 'committee-activity', days],
     queryFn: () => api<CommitteeActivity>(`${base(orgId)}/committee-activity?days=${days}`),
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -124,5 +129,6 @@ export function useAnalyticsFeedbackTrends(orgId: string, days: number) {
   return useQuery({
     queryKey: ['org', orgId, 'analytics', 'feedback-trends', days],
     queryFn: () => api<AnalyticsFeedbackTrends>(`${base(orgId)}/feedback-trends?days=${days}`),
+    placeholderData: keepPreviousData,
   });
 }

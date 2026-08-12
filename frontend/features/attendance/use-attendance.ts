@@ -1,7 +1,7 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api } from '@/lib/api';
+import { api, apiOrNull } from '@/lib/api';
 import type { Attendance, MyAttendance } from '@/types/api';
 
 function base(orgId: string, eventId: string) {
@@ -11,8 +11,8 @@ function base(orgId: string, eventId: string) {
 export function useMyAttendance(orgId: string, eventId: string) {
   return useQuery({
     queryKey: ['org', orgId, 'event', eventId, 'attendance', 'me'],
-    queryFn: () => api<MyAttendance>(`${base(orgId, eventId)}/me`),
-    retry: false, // a 404 here is a meaningful answer (no attendance row), not a flake
+    // 404 = "no attendance row", which is data. See apiOrNull.
+    queryFn: () => apiOrNull<MyAttendance>(`${base(orgId, eventId)}/me`),
   });
 }
 

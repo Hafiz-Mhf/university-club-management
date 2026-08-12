@@ -2,6 +2,7 @@
 
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -57,7 +58,21 @@ export function RegisterDialog({ orgId, eventId, eventTitle, open, onOpenChange 
       if (v === undefined || v === null || v === '') continue;
       answers[field.id] = typeof v === 'boolean' ? String(v) : String(v);
     }
-    register.mutate(answers, { onSuccess: () => onOpenChange(false) });
+    register.mutate(answers, {
+      onSuccess: (registration) => {
+        onOpenChange(false);
+        // The dialog closes on success, so without this the only signal that
+        // anything happened is a badge appearing further down the page —
+        // and a waitlisted result would look identical to an approved one.
+        if (registration.status === 'WAITLISTED') {
+          toast.warning(`${eventTitle} is full — you're on the waitlist`, {
+            description: "We'll email you if a spot opens up.",
+          });
+        } else {
+          toast.success(`You're registered for ${eventTitle}`);
+        }
+      },
+    });
   });
 
   return (

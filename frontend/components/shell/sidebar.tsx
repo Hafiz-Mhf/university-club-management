@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 import { OrgSwitcher } from '@/components/shell/org-switcher';
 import { ThemeToggle } from '@/components/theme/theme-toggle';
 import { UserMenu } from '@/components/shell/user-menu';
-import { NAV_ITEMS } from '@/components/shell/nav-items';
+import { NAV_ITEMS, navLabel } from '@/components/shell/nav-items';
 import { useOrg } from '@/features/orgs/org-provider';
 import { isCommittee } from '@/features/orgs/roles';
 
@@ -18,7 +18,12 @@ export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <div className="flex h-full flex-col gap-2 p-3">
       <OrgSwitcher />
-      <nav className="flex flex-1 flex-col gap-0.5 pt-2" aria-label="Main navigation">
+      {/* min-h-0 + overflow lets the nav scroll on short viewports instead of
+          pushing the account block off the bottom of the sidebar. */}
+      <nav
+        className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto pt-2"
+        aria-label="Main navigation"
+      >
         {NAV_ITEMS.filter((item) => item.minTier === 'member' || committee).map((item) => {
           const href = item.segment ? `/${org.slug}/${item.segment}` : `/${org.slug}`;
           const active = pathname === href;
@@ -42,14 +47,19 @@ export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
               <Icon
                 className={cn('size-4 shrink-0', active ? 'text-primary' : item.iconClass)}
               />
-              {item.label}
+              {navLabel(item, committee)}
             </Link>
           );
         })}
       </nav>
-      <div className="flex items-center justify-between border-t border-sidebar-border pt-3">
-        <ThemeToggle />
-        <UserMenu />
+      {/* Pinned: account and sign-out stay visible however long the nav gets. */}
+      <div className="shrink-0 border-t border-sidebar-border pt-2">
+        <div className="flex items-start gap-1">
+          <div className="min-w-0 flex-1">
+            <UserMenu onNavigate={onNavigate} />
+          </div>
+          <ThemeToggle />
+        </div>
       </div>
     </div>
   );
@@ -57,7 +67,9 @@ export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
 
 export function Sidebar() {
   return (
-    <aside className="hidden w-65 shrink-0 border-r border-sidebar-border bg-sidebar lg:block">
+    // Pinned to the viewport: the page below scrolls, the sidebar (and the
+    // account block at its foot) does not scroll out of reach.
+    <aside className="hidden w-65 shrink-0 border-r border-sidebar-border bg-sidebar lg:sticky lg:top-0 lg:block lg:h-dvh">
       <SidebarNav />
     </aside>
   );

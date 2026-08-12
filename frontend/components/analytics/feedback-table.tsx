@@ -5,6 +5,8 @@ import { useAnalyticsFeedback } from '@/features/analytics/use-analytics';
 import { useEvents } from '@/features/events/use-events';
 import { resolveEventTitle } from '@/features/analytics/resolve-event-title';
 import { useOrg } from '@/features/orgs/org-provider';
+import { Refreshing } from '@/components/ui/refreshing';
+import { SkeletonList } from '@/components/ui/skeleton-list';
 
 function fmt(v: number) {
   return v.toFixed(1);
@@ -15,7 +17,7 @@ export function FeedbackTable({ orgId }: { orgId: string }) {
   const feedback = useAnalyticsFeedback(orgId);
   const events = useEvents(orgId);
 
-  if (feedback.isPending) return null;
+  if (feedback.isPending) return <SkeletonList rows={4} rowClassName="h-12" label="Loading feedback" />;
   if (feedback.isError || !feedback.data) {
     return <p className="text-sm text-foreground-muted">Couldn&apos;t load feedback data.</p>;
   }
@@ -24,7 +26,7 @@ export function FeedbackTable({ orgId }: { orgId: string }) {
   }
 
   return (
-    <div className="overflow-x-auto">
+    <Refreshing active={feedback.isFetching} label="Refreshing feedback" className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-border text-left text-xs text-foreground-muted uppercase">
@@ -53,6 +55,6 @@ export function FeedbackTable({ orgId }: { orgId: string }) {
           ))}
         </tbody>
       </table>
-    </div>
+    </Refreshing>
   );
 }

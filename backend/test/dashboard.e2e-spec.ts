@@ -130,6 +130,18 @@ describe('Dashboard summary (e2e)', () => {
       });
     });
 
+    it('names the people behind the waitlist, recent registrations, and activity', async () => {
+      const res = await request(app.getHttpServer())
+        .get(`/organizations/${orgId}/dashboard`)
+        .set('Authorization', `Bearer ${presToken}`).expect(200);
+
+      expect(res.body.pendingApprovals[0].userName).toEqual(expect.any(String));
+      expect(res.body.recentRegistrations[0].userName).toEqual(expect.any(String));
+      const withActor = res.body.activityFeed.find((a: { actorUserId: string | null }) => a.actorUserId);
+      expect(withActor.actorName).toEqual(expect.any(String));
+      expect(JSON.stringify(res.body)).not.toContain('passwordHash');
+    });
+
     it('recentRegistrations contains both registrations, newest first', async () => {
       const res = await request(app.getHttpServer())
         .get(`/organizations/${orgId}/dashboard`)

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import type { AgendaItem, MeetingMinutes } from '@/types/api';
 
@@ -19,6 +19,9 @@ export function useMinutesList(orgId: string, page: number, pageSize: number) {
   return useQuery({
     queryKey: ['org', orgId, 'minutes', 'list', page, pageSize],
     queryFn: () => api<MinutesListResponse>(`${base(orgId)}?page=${page}&pageSize=${pageSize}`),
+    // Paging keeps the current page visible instead of collapsing the table to
+    // a skeleton on every click.
+    placeholderData: keepPreviousData,
   });
 }
 

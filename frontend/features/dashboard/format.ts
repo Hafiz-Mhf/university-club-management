@@ -52,6 +52,11 @@ export function auditActionSentence(action: string): string {
   return ACTION_SENTENCES[action] ?? action.split('.').join(' ');
 }
 
+/**
+ * Relative time is only useful while "how long ago" is still countable —
+ * past a month, "380d ago" is arithmetic homework and a date is both shorter
+ * and more precise, so this hands over to shortDate().
+ */
 export function relativeTime(iso: string): string {
   const deltaMs = Date.now() - new Date(iso).getTime();
   const minutes = Math.floor(deltaMs / 60_000);
@@ -60,7 +65,19 @@ export function relativeTime(iso: string): string {
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours}h ago`;
   const days = Math.floor(hours / 24);
-  return `${days}d ago`;
+  if (days <= 30) return `${days}d ago`;
+  return shortDate(iso);
+}
+
+/** "12 Aug 2026" — same year omits the year: "12 Aug". */
+export function shortDate(iso: string): string {
+  const date = new Date(iso);
+  const sameYear = date.getFullYear() === new Date().getFullYear();
+  return date.toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    ...(sameYear ? {} : { year: 'numeric' }),
+  });
 }
 
 export function formatCount(n: number): string {

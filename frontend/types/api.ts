@@ -42,11 +42,13 @@ export interface Organization {
   advisors: string[] | null;
 }
 
-export interface MyMembership {
-  id: string;
-  role: MembershipRole;
-  status: MemberStatus;
-}
+/**
+ * GET /organizations/:id/members/me returns the caller's full membership row,
+ * user relation included — the same shape as any row in the members list. This
+ * used to be declared as just id/role/status, which is why the account page had
+ * no identity to show.
+ */
+export type MyMembership = Member;
 
 export interface DashboardSummary {
   kpis: {
@@ -67,6 +69,7 @@ export interface DashboardSummary {
     eventId: string;
     eventTitle: string;
     userId: string;
+    userName: string;
     createdAt: string;
   }[];
   recentRegistrations: {
@@ -74,6 +77,7 @@ export interface DashboardSummary {
     eventId: string;
     eventTitle: string;
     userId: string;
+    userName: string;
     status: 'PENDING' | 'APPROVED' | 'WAITLISTED' | 'CANCELLED' | 'REJECTED';
     createdAt: string;
   }[];
@@ -83,6 +87,8 @@ export interface DashboardSummary {
     targetType: string | null;
     targetId: string | null;
     actorUserId: string | null;
+    /** Resolved from actorUserId server-side; null for system-written rows. */
+    actorName: string | null;
     createdAt: string;
   }[];
 }
@@ -106,6 +112,13 @@ export interface Event {
   updatedAt: string;
 }
 
+/** An event row as returned by the list endpoint, which counts its own signups. */
+export interface EventListItem extends Event {
+  approvedCount: number;
+  waitlistedCount: number;
+  feedbackCount: number;
+}
+
 export type RegistrationStatus = 'APPROVED' | 'WAITLISTED' | 'REJECTED' | 'CANCELLED';
 
 export interface Registration {
@@ -118,6 +131,23 @@ export interface Registration {
   consentRecordId: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * Who registered. Present only on the committee-facing list endpoint —
+ * `GET .../registrations/me` returns a bare Registration, since a participant
+ * reading their own row already knows who they are.
+ */
+export interface RegistrationUser {
+  id: string;
+  fullName: string;
+  email: string;
+  studentId: string | null;
+  programme: string | null;
+}
+
+export interface RegistrationWithUser extends Registration {
+  user: RegistrationUser;
 }
 
 export type FormFieldType = 'TEXT' | 'TEXTAREA' | 'SELECT' | 'CHECKBOX';
@@ -199,6 +229,28 @@ export interface FeedbackResponse {
   venueRating: number;
   comment: string | null;
   createdAt: string;
+}
+
+// GET /organizations/:orgId/me/participation — one row per registration the
+// caller holds anywhere in the org. Own data only; certificates are presence
+// flags, the signed download URL still comes from the per-event
+// `certificates/me` endpoint.
+export interface ParticipationItem {
+  registrationId: string;
+  status: RegistrationStatus;
+  registeredAt: string;
+  event: {
+    id: string;
+    title: string;
+    startAt: string;
+    endAt: string;
+    venue: string | null;
+    status: EventStatus;
+  };
+  // null while WAITLISTED — the Attendance row is only created on approval.
+  attendance: { status: AttendanceStatus; scannedAt: string | null } | null;
+  hasCertificate: boolean;
+  feedbackSubmitted: boolean;
 }
 
 export interface AgendaItem {

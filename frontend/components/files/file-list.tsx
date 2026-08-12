@@ -11,6 +11,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Refreshing } from '@/components/ui/refreshing';
+import { SkeletonList } from '@/components/ui/skeleton-list';
 import { FileCategoryBadge } from '@/components/files/file-category-badge';
 import { useDeleteFile, useDownloadFile, useFiles } from '@/features/files/use-files';
 import { resolveUploaderName } from '@/features/files/resolve-uploader-name';
@@ -48,12 +50,21 @@ export function FileList({ orgId, canManage }: { orgId: string; canManage: boole
         ))}
       </select>
 
-      {files.isPending ? null : files.isError ? (
+      {files.isPending ? (
+        <SkeletonList rows={4} label="Loading files" />
+      ) : files.isError ? (
         <p className="text-sm text-foreground-muted">Couldn&apos;t load files.</p>
       ) : files.data.length === 0 ? (
-        <p className="py-8 text-center text-sm text-foreground-muted">No files yet.</p>
+        <p className="mx-auto max-w-md py-10 text-center text-sm text-foreground-muted">
+          No files yet. This is where the committee keeps SOPs, event reports, financial
+          records and meeting documents — everything the next committee will need.
+        </p>
       ) : (
-        <div className="flex flex-col gap-2">
+        <Refreshing
+          active={files.isFetching}
+          label="Refreshing files"
+          className="flex flex-col gap-2"
+        >
           {files.data.map((f) => (
             <div
               key={f.id}
@@ -95,7 +106,7 @@ export function FileList({ orgId, canManage }: { orgId: string; canManage: boole
               </div>
             </div>
           ))}
-        </div>
+        </Refreshing>
       )}
 
       <Dialog open={removing !== null} onOpenChange={(open) => !open && setRemoving(null)}>

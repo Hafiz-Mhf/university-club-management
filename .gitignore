@@ -49,3 +49,5 @@ Thumbs.db
 # Tool scratch output
 .playwright-mcp/
 graphify-out/
+.impeccable/
+.superpowers/

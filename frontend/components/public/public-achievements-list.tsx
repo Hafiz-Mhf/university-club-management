@@ -1,6 +1,7 @@
 'use client';
 
 import { Trophy } from 'lucide-react';
+import { Refreshing } from '@/components/ui/refreshing';
 import { Skeleton } from '@/components/ui/skeleton';
 import { usePublicAchievements } from '@/features/public/use-public-club';
 
@@ -21,19 +22,21 @@ export function PublicAchievementsList({ orgSlug }: { orgSlug: string }) {
         <p className="text-sm text-foreground-muted">No achievements yet.</p>
       )}
       {achievements.data && achievements.data.length > 0 && (
-        <ul className="flex flex-col gap-2">
-          {achievements.data.map((a) => (
-            <li key={a.id} className="flex items-start gap-3 rounded-lg border border-border p-3">
-              <Trophy className="mt-0.5 size-4 shrink-0 text-domain-certificates" />
-              <div>
-                <p className="text-sm font-medium">
-                  {a.title} <span className="text-foreground-muted">— {a.year}</span>
-                </p>
-                <p className="text-sm text-foreground-muted">{a.description}</p>
-              </div>
-            </li>
-          ))}
-        </ul>
+        <Refreshing active={achievements.isFetching} label="Refreshing achievements">
+          <ul className="flex flex-col gap-2">
+            {achievements.data.map((a) => (
+              <li key={a.id} className="flex items-start gap-3 rounded-lg border border-border p-3">
+                <Trophy className="mt-0.5 size-4 shrink-0 text-domain-certificates" />
+                <div>
+                  <p className="text-sm font-medium">
+                    {a.title} <span className="text-foreground-muted">— {a.year}</span>
+                  </p>
+                  <p className="text-sm text-foreground-muted">{a.description}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </Refreshing>
       )}
     </section>
   );

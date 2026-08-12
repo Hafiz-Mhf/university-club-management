@@ -1,52 +1,81 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { OrganizationTab } from '@/components/orgs/organization-tab';
 import { MyAccountTab } from '@/components/account/my-account-tab';
+import { SkeletonList } from '@/components/ui/skeleton-list';
+import { TabStrip, tabPanelId, tabId } from '@/components/ui/tab-strip';
 import { useOrg } from '@/features/orgs/org-provider';
 import { isCommittee } from '@/features/orgs/roles';
-import { cn } from '@/lib/utils';
 
 type Tab = 'organization' | 'account';
 
-export default function SettingsPage() {
+function SettingsTabs() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
   const { org, membership } = useOrg();
   const committee = isCommittee(membership.role);
-  const [tab, setTab] = useState<Tab>(committee ? 'organization' : 'account');
 
-  const tabs: { id: Tab; label: string }[] = committee
+  const tabs = committee
     ? [
-        { id: 'organization', label: 'Organization' },
-        { id: 'account', label: 'My Account' },
+        { id: 'organization' as const, label: 'Organization' },
+        { id: 'account' as const, label: 'My Account' },
       ]
-    : [{ id: 'account', label: 'My Account' }];
+    : [{ id: 'account' as const, label: 'My Account' }];
 
+  // The URL is the source of truth, not local state: the sidebar links straight
+  // to ?tab=account, and back/forward now steps through tabs instead of leaving
+  // Settings entirely.
+  const requested = params.get('tab');
+  const tab: Tab = requested === 'account' || !committee ? 'account' : 'organization';
+
+  const select = (next: Tab) => {
+    router.replace(`${pathname}?tab=${next}`, { scroll: false });
+  };
+
+  return (
+    <>
+      {tabs.length > 1 && (
+        <TabStrip label="Settings sections" tabs={tabs} value={tab} onChange={select} />
+      )}
+
+      {/* Both panels stay mounted, inactive one hidden. Unmounting the org form
+          on a tab switch silently threw away whatever the user had typed. */}
+      {committee && (
+        <div
+          role="tabpanel"
+          id={tabPanelId('organization')}
+          aria-labelledby={tabId('organization')}
+          hidden={tab !== 'organization'}
+        >
+          <OrganizationTab orgId={org.id} role={membership.role} />
+        </div>
+      )}
+      <div
+        role="tabpanel"
+        id={tabPanelId('account')}
+        aria-labelledby={tabId('account')}
+        hidden={tab !== 'account'}
+      >
+        <MyAccountTab />
+      </div>
+    </>
+  );
+}
+
+export default function SettingsPage() {
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-5 p-4 lg:p-6">
       <h1 className="text-2xl font-semibold">Settings</h1>
-
-      {tabs.length > 1 && (
-        <div className="flex w-fit flex-wrap rounded-md border border-border p-0.5">
-          {tabs.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setTab(t.id)}
-              className={cn(
-                'rounded-sm px-3 py-1.5 text-sm font-medium',
-                tab === t.id && 'bg-primary/10 text-primary',
-              )}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {tab === 'organization' && committee && (
-        <OrganizationTab orgId={org.id} role={membership.role} />
-      )}
-      {tab === 'account' && <MyAccountTab />}
+      {/* useSearchParams client-side renders this subtree, so it needs its own
+          boundary — and a placeholder rather than a blank page while it lands. */}
+      <Suspense
+        fallback={<SkeletonList rows={3} rowClassName="h-24" className="gap-6" label="Loading settings" />}
+      >
+        <SettingsTabs />
+      </Suspense>
     </main>
   );
 }

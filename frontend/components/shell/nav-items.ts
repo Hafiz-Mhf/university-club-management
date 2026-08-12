@@ -23,11 +23,28 @@ export interface NavItem {
    * covers exactly seven domains and is not extended per-page.
    */
   iconClass?: string;
+  /**
+   * Label shown to non-committee members, where the committee wording would
+   * misdescribe what the route actually renders for them (the org root is a
+   * committee dashboard, but a participant's own event list).
+   */
+  participantLabel?: string;
   minTier: 'member' | 'committee';
 }
 
+/** The label a given role should see for this item. */
+export function navLabel(item: NavItem, committee: boolean): string {
+  return committee ? item.label : (item.participantLabel ?? item.label);
+}
+
 export const NAV_ITEMS: NavItem[] = [
-  { label: 'Dashboard', segment: '', icon: LayoutDashboard, minTier: 'member' },
+  {
+    label: 'Dashboard',
+    participantLabel: 'My events',
+    segment: '',
+    icon: LayoutDashboard,
+    minTier: 'member',
+  },
   { label: 'Events', segment: 'events', icon: CalendarDays, iconClass: 'text-domain-events', minTier: 'member' },
   { label: 'Members', segment: 'members', icon: Users, minTier: 'committee' },
   { label: 'Attendance', segment: 'attendance', icon: QrCode, iconClass: 'text-domain-attendance', minTier: 'member' },

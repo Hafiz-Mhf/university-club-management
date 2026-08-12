@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Award, ChartNoAxesCombined, Download, Percent } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Refreshing } from '@/components/ui/refreshing';
 import { Skeleton } from '@/components/ui/skeleton';
 import { KpiCard } from '@/components/dashboard/kpi-card';
 import { HorizontalBarChart } from '@/components/analytics/horizontal-bar-chart';
@@ -56,18 +57,26 @@ export default function AnalyticsPage() {
     <main className="mx-auto flex w-full max-w-screen-2xl flex-col gap-6 p-4 lg:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold">Analytics</h1>
-        <div className="flex w-fit rounded-md border border-border p-0.5">
-          {RANGES.map((r) => (
-            <Button
-              key={r}
-              variant="ghost"
-              size="sm"
-              onClick={() => setDays(r)}
-              className={cn(days === r && 'bg-primary/10 text-primary')}
-            >
-              {r}d
-            </Button>
-          ))}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-foreground-muted">Trends over the last</span>
+          <div
+            className="flex w-fit rounded-md border border-border p-0.5"
+            role="group"
+            aria-label="Trend range"
+          >
+            {RANGES.map((r) => (
+              <Button
+                key={r}
+                variant="ghost"
+                size="sm"
+                aria-pressed={days === r}
+                onClick={() => setDays(r)}
+                className={cn(days === r && 'bg-primary/10 text-primary')}
+              >
+                {r}d
+              </Button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -95,19 +104,22 @@ export default function AnalyticsPage() {
 
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-semibold">Growth &amp; registrations</h2>
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid items-start gap-4 lg:grid-cols-2">
           <div className="flex flex-col gap-2 rounded-lg border border-border p-4">
             <p className="text-sm font-medium">Registration trend</p>
             {trends.isPending ? (
               <Skeleton className="h-64 rounded-lg" />
             ) : (
-              <SingleSeriesLineChart
-                data={(trends.data?.registrationTrend ?? []).map((t) => ({
-                  date: t.date,
-                  value: t.count,
-                }))}
-                label="Registrations"
-              />
+              <Refreshing active={trends.isFetching} label="Refreshing registration trend">
+                <SingleSeriesLineChart
+                  data={(trends.data?.registrationTrend ?? []).map((t) => ({
+                    date: t.date,
+                    value: t.count,
+                  }))}
+                  label="Registrations"
+                  color="var(--chart-2)"
+                />
+              </Refreshing>
             )}
           </div>
           <div className="flex flex-col gap-2 rounded-lg border border-border p-4">
@@ -115,13 +127,16 @@ export default function AnalyticsPage() {
             {trends.isPending ? (
               <Skeleton className="h-64 rounded-lg" />
             ) : (
-              <SingleSeriesLineChart
-                data={(trends.data?.memberGrowth ?? []).map((t) => ({
-                  date: t.date,
-                  value: t.cumulativeActive,
-                }))}
-                label="Active members"
-              />
+              <Refreshing active={trends.isFetching} label="Refreshing member growth">
+                <SingleSeriesLineChart
+                  data={(trends.data?.memberGrowth ?? []).map((t) => ({
+                    date: t.date,
+                    value: t.cumulativeActive,
+                  }))}
+                  label="Active members"
+                  color="var(--chart-1)"
+                />
+              </Refreshing>
             )}
           </div>
         </div>
@@ -129,13 +144,22 @@ export default function AnalyticsPage() {
 
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-semibold">Demographics</h2>
-        <div className="grid gap-4 lg:grid-cols-2">
+        <p className="-mt-2 text-xs text-foreground-muted">
+          All active members, not affected by the trend range above.
+        </p>
+        <div className="grid items-start gap-4 lg:grid-cols-2">
           <div className="flex flex-col gap-2 rounded-lg border border-border p-4">
             <p className="text-sm font-medium">Faculty</p>
             {demographics.isPending ? (
               <Skeleton className="h-64 rounded-lg" />
             ) : (
-              <HorizontalBarChart data={toBarData(demographics.data?.faculty ?? [])} />
+              <Refreshing active={demographics.isFetching} label="Refreshing faculty breakdown">
+                <HorizontalBarChart
+                  data={toBarData(demographics.data?.faculty ?? [])}
+                  color="var(--chart-2)"
+                  valueLabel="Members"
+                />
+              </Refreshing>
             )}
           </div>
           <div className="flex flex-col gap-2 rounded-lg border border-border p-4">
@@ -143,7 +167,13 @@ export default function AnalyticsPage() {
             {demographics.isPending ? (
               <Skeleton className="h-64 rounded-lg" />
             ) : (
-              <HorizontalBarChart data={toBarData(demographics.data?.programme ?? [])} />
+              <Refreshing active={demographics.isFetching} label="Refreshing programme breakdown">
+                <HorizontalBarChart
+                  data={toBarData(demographics.data?.programme ?? [])}
+                  color="var(--chart-3)"
+                  valueLabel="Members"
+                />
+              </Refreshing>
             )}
           </div>
         </div>
@@ -155,28 +185,36 @@ export default function AnalyticsPage() {
           {committeeActivity.isPending ? (
             <Skeleton className="h-64 rounded-lg" />
           ) : (
-            <HorizontalBarChart
-              data={committeeActivityToBarData(committeeActivity.data?.data ?? [])}
-            />
+            <Refreshing active={committeeActivity.isFetching} label="Refreshing committee activity">
+              <HorizontalBarChart
+                data={committeeActivityToBarData(committeeActivity.data?.data ?? [])}
+                color="var(--chart-1)"
+                valueLabel="Actions"
+              />
+            </Refreshing>
           )}
         </div>
       </section>
 
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-semibold">Feedback</h2>
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid items-start gap-4 lg:grid-cols-2">
           <div className="flex flex-col gap-2 rounded-lg border border-border p-4">
             <p className="text-sm font-medium">NPS trend</p>
             {feedbackTrends.isPending ? (
               <Skeleton className="h-64 rounded-lg" />
             ) : (
-              <SingleSeriesLineChart
-                data={(feedbackTrends.data?.trend ?? []).map((t) => ({
-                  date: t.date,
-                  value: t.avgNpsScore,
-                }))}
-                label="NPS"
-              />
+              <Refreshing active={feedbackTrends.isFetching} label="Refreshing NPS trend">
+                <SingleSeriesLineChart
+                  data={(feedbackTrends.data?.trend ?? []).map((t) => ({
+                    date: t.date,
+                    value: t.avgNpsScore,
+                  }))}
+                  label="NPS"
+                  color="var(--chart-feedback)"
+                  domain={[0, 10]}
+                />
+              </Refreshing>
             )}
           </div>
           <div className="flex flex-col gap-2 rounded-lg border border-border p-4">
@@ -184,14 +222,16 @@ export default function AnalyticsPage() {
             {feedbackTrends.isPending ? (
               <Skeleton className="h-64 rounded-lg" />
             ) : (
-              <RatingsTrendChart
-                data={(feedbackTrends.data?.trend ?? []).map((t) => ({
-                  date: t.date,
-                  content: t.avgContentRating,
-                  organization: t.avgOrganizationRating,
-                  venue: t.avgVenueRating,
-                }))}
-              />
+              <Refreshing active={feedbackTrends.isFetching} label="Refreshing ratings trend">
+                <RatingsTrendChart
+                  data={(feedbackTrends.data?.trend ?? []).map((t) => ({
+                    date: t.date,
+                    content: t.avgContentRating,
+                    organization: t.avgOrganizationRating,
+                    venue: t.avgVenueRating,
+                  }))}
+                />
+              </Refreshing>
             )}
           </div>
         </div>
