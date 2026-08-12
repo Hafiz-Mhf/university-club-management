@@ -53,6 +53,7 @@ export class PdpaService {
         },
         consentRecords: true,
         certificates: { include: { event: { select: { title: true } } } },
+        feedbackResponses: { include: { event: { select: { title: true } } } },
       },
     });
     if (!user) throw new NotFoundException(); // unreachable for an authenticated token; guards the type
@@ -106,6 +107,15 @@ export class PdpaService {
         grantedAt: c.grantedAt,
       })),
       certificates,
+      feedback: user.feedbackResponses.map((f) => ({
+        eventTitle: f.event.title,
+        npsScore: f.npsScore,
+        contentRating: f.contentRating,
+        organizationRating: f.organizationRating,
+        venueRating: f.venueRating,
+        comment: f.comment,
+        createdAt: f.createdAt,
+      })),
       exportedAt: new Date().toISOString(),
     };
   }
@@ -117,6 +127,7 @@ export class PdpaService {
         memberships: { include: { organization: { select: { name: true } } } },
         registrations: { select: { id: true } },
         certificates: { select: { id: true, storageKey: true } },
+        feedbackResponses: { select: { id: true } },
       },
     });
     if (!user || user.deletedAt) return; // idempotent within the access-token window
@@ -163,6 +174,23 @@ export class PdpaService {
       for (const r of user.registrations) {
         await tx.registration.update({ where: { id: r.id }, data: { answers: Prisma.DbNull } });
       }
+      // Same treatment as registration answers: keep the row so the org's NPS
+      // and rating averages stay intact, but clear the free-text comment —
+      // the only free-form personal data on a feedback response. Looped by
+      // unique id rather than updateMany because erasure spans every org the
+      // user belongs to, which an org-scoped bulk write can't express.
+      for (const f of user.feedbackResponses) {
+        await tx.feedbackResponse.update({ where: { id: f.id }, data: { comment: null } });
+      }
+      // CertificateDownload.certificateId is ON DELETE RESTRICT, so the
+      // download history must go first or the certificate delete below throws
+      // P2003 and rolls back the whole erasure. Two sets are in scope: rows
+      // against this user's own certificates (the FK blocker), and rows
+      // recording downloads *this user performed* on anyone's certificate —
+      // the latter is their own activity history, which erasure should clear.
+      await tx.certificateDownload.deleteMany({
+        where: { OR: [{ certificateId: { in: user.certificates.map((c) => c.id) } }, { userId }] },
+      });
       for (const c of user.certificates) {
         try {
           await tx.certificate.delete({ where: { id: c.id } });

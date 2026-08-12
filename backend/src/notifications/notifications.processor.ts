@@ -100,7 +100,28 @@ export class NotificationsProcessor extends WorkerHost {
       where: { eventId, organizationId, status: 'APPROVED' },
       include: { user: { select: { email: true, fullName: true } } },
     });
+
+    // A retry restarts this job from the top, so the audit rows written below
+    // double as the record of who has already been emailed on an earlier
+    // attempt — without this, one failed send late in the list would re-mail
+    // everyone before it.
+    const alreadySent = await this.prisma.auditLog.findMany({
+      where: {
+        organizationId,
+        action: 'notification.email',
+        targetType: 'Registration',
+        targetId: { in: registrations.map((r) => r.id) },
+        // Scoped to this job kind: the same action/targetType pair is also
+        // written for approval and rejection emails, and those must not
+        // suppress a reminder.
+        metadata: { path: ['kind'], equals: job.name },
+      },
+      select: { targetId: true },
+    });
+    const sentIds = new Set(alreadySent.map((a) => a.targetId));
+
     for (const registration of registrations) {
+      if (sentIds.has(registration.id)) continue;
       const { subject, text } = eventReminderEmail({
         fullName: registration.user.fullName, eventTitle: event.title, venue: event.venue, startAt: event.startAt,
       });

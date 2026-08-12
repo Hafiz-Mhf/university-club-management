@@ -45,3 +45,7 @@ build/
 # Misc
 Thumbs.db
 .DS_Store
+
+# Tool scratch output
+.playwright-mcp/
+graphify-out/

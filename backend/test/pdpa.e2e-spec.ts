@@ -91,6 +91,17 @@ describe('PDPA (e2e)', () => {
       await prisma.certificate.create({
         data: { eventId, organizationId: orgId, userId: partUserId, storageKey: key, fileSizeBytes: 20, uploadedByUserId: partUserId },
       });
+
+      // Seeded feedback response — the submit endpoint requires a completed
+      // event plus PRESENT attendance inside the 14-day window, which is
+      // feedback-suite territory; this suite only cares that export covers it.
+      await prisma.feedbackResponse.create({
+        data: {
+          eventId, organizationId: orgId, userId: partUserId,
+          npsScore: 9, contentRating: 5, organizationRating: 4, venueRating: 3,
+          comment: 'venue was hard to find',
+        },
+      });
     });
 
     it('GET /me/consents lists account + event-registration consents, no ipAddress', async () => {
@@ -123,6 +134,15 @@ describe('PDPA (e2e)', () => {
       expect(res.body.consents).toHaveLength(2);
       expect(res.body.certificates).toHaveLength(1);
       expect(res.body.certificates[0].eventTitle).toBe('PDPA Event');
+      expect(res.body.feedback).toHaveLength(1);
+      expect(res.body.feedback[0]).toMatchObject({
+        eventTitle: 'PDPA Event',
+        npsScore: 9,
+        contentRating: 5,
+        organizationRating: 4,
+        venueRating: 3,
+        comment: 'venue was hard to find',
+      });
       expect(res.body.exportedAt).toBeDefined();
 
       // The signed URL actually serves the file.
@@ -134,6 +154,7 @@ describe('PDPA (e2e)', () => {
         .set('Authorization', `Bearer ${presToken}`).expect(200);
       expect(presRes.body.registrations).toEqual([]);
       expect(presRes.body.certificates).toEqual([]);
+      expect(presRes.body.feedback).toEqual([]);
       expect(presRes.body.memberships).toHaveLength(1); // own org presidency only
     });
 
@@ -234,6 +255,14 @@ describe('PDPA (e2e)', () => {
       });
       const signedBefore = await storage.getSignedDownloadUrl(key, 60);
 
+      await prisma.feedbackResponse.create({
+        data: {
+          eventId, organizationId: orgId, userId,
+          npsScore: 8, contentRating: 4, organizationRating: 5, venueRating: 2,
+          comment: 'the food had peanuts in it',
+        },
+      });
+
       const regCountBefore = await prisma.registration.count({ where: { organizationId: orgId, eventId } });
 
       await request(app.getHttpServer()).delete('/me')
@@ -271,6 +300,12 @@ describe('PDPA (e2e)', () => {
       const consents = await prisma.consentRecord.findMany({ where: { userId } });
       expect(consents.length).toBeGreaterThanOrEqual(2);
 
+      // Feedback free-text scrubbed; ratings retained so org NPS/averages hold
+      const feedback = (await prisma.feedbackResponse.findMany({ where: { organizationId: orgId, userId } }))[0];
+      expect(feedback.comment).toBeNull();
+      expect(feedback.npsScore).toBe(8);
+      expect(feedback.venueRating).toBe(2);
+
       // Certificate row + object gone
       const certs = await prisma.certificate.findMany({ where: { organizationId: orgId, userId } });
       expect(certs).toHaveLength(0);
@@ -286,6 +321,49 @@ describe('PDPA (e2e)', () => {
       // Second DELETE within the token window: idempotent 204
       await request(app.getHttpServer()).delete('/me')
         .set('Authorization', `Bearer ${token}`).expect(204);
+    });
+
+    it('succeeds for a user who has downloaded their own certificate', async () => {
+      // CertificateDownload.certificateId is ON DELETE RESTRICT, so the
+      // download history has to be cleared before the certificate row.
+      // The fixtures above seed certificates via Prisma and never call the
+      // download endpoint, so they never create a CertificateDownload row —
+      // this test goes through the real GET .../certificates/me path, which
+      // every participant who has ever looked at their certificate has hit.
+      const presEmail = `pdpa-dlpres-${Date.now()}@test.io`;
+      const presToken = await registerAndLogin(presEmail);
+      const orgId = (await request(app.getHttpServer()).post('/organizations').set('Authorization', `Bearer ${presToken}`)
+        .send({ name: 'DlOrg', slug: `dlorg-${Date.now()}` })).body.id;
+      const eventId = (await request(app.getHttpServer()).post(`/organizations/${orgId}/events`)
+        .set('Authorization', `Bearer ${presToken}`)
+        .send({ title: 'Dl Event', startAt: future(5), endAt: future(6) })).body.id;
+      await request(app.getHttpServer()).post(`/organizations/${orgId}/events/${eventId}/publish`)
+        .set('Authorization', `Bearer ${presToken}`).expect(200);
+
+      const email = `pdpa-dl-${Date.now()}@test.io`;
+      const token = await registerAndLogin(email);
+      const userId = (await prisma.user.findUnique({ where: { email } }))!.id;
+      await request(app.getHttpServer()).post(`/organizations/${orgId}/events/${eventId}/registrations`)
+        .set('Authorization', `Bearer ${token}`).send({}).expect(201);
+
+      const { StorageService } = await import('../src/storage/storage.service');
+      const storage = app.get(StorageService);
+      const key = `certificates/${orgId}/${eventId}/${userId}.pdf`;
+      await storage.putObject(key, Buffer.from('%PDF-1.4\ndl cert\n'), 'application/pdf');
+      await prisma.certificate.create({
+        data: { eventId, organizationId: orgId, userId, storageKey: key, fileSizeBytes: 17, uploadedByUserId: userId },
+      });
+
+      // The participant views their certificate — this writes the CertificateDownload row.
+      await request(app.getHttpServer()).get(`/organizations/${orgId}/events/${eventId}/certificates/me`)
+        .set('Authorization', `Bearer ${token}`).expect(200);
+      expect(await prisma.certificateDownload.count({ where: { userId } })).toBeGreaterThanOrEqual(1);
+
+      await request(app.getHttpServer()).delete('/me')
+        .set('Authorization', `Bearer ${token}`).expect(204);
+
+      expect(await prisma.certificate.findMany({ where: { organizationId: orgId, userId } })).toHaveLength(0);
+      expect(await prisma.certificateDownload.count({ where: { userId } })).toBe(0);
     });
   });
 

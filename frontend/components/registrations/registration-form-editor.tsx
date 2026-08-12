@@ -42,6 +42,20 @@ export function RegistrationFormEditor({ orgId, event }: { orgId: string; event:
 
   if (formQuery.isPending) return null;
 
+  // Falling through to the editor here would render the event's saved form as
+  // empty, and Save does a full replace — one click would wipe a form that
+  // merely failed to load.
+  if (formQuery.isError) {
+    return (
+      <div className="flex flex-col items-start gap-3">
+        <p className="text-sm text-foreground-muted">Couldn&apos;t load the registration form.</p>
+        <Button variant="secondary" onClick={() => formQuery.refetch()}>
+          Try again
+        </Button>
+      </div>
+    );
+  }
+
   const topError =
     upsert.error instanceof ApiError
       ? upsert.error.message

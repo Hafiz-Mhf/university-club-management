@@ -78,7 +78,15 @@ export function AttendanceRoster({ orgId, eventId }: { orgId: string; eventId: s
       ) : (
         <div className="flex flex-col gap-2">
           {filtered.map((a) => {
-            const name = resolveParticipantName(a, registrations.data ?? [], members.data ?? []);
+            // This roster is open to VOLUNTEERs, but GET /registrations and
+            // GET /members are MANAGE_EVENTS-gated — a 403 here is an expected
+            // authorization boundary, not a missing row, so it must not fall
+            // through to resolveParticipantName's raw-id fallback (that would
+            // leak an internal UUID to every volunteer).
+            const name =
+              registrations.isError || members.isError
+                ? 'Participant'
+                : resolveParticipantName(a, registrations.data ?? [], members.data ?? []);
             const canMarkAbsent = a.status === 'REGISTERED';
             return (
               <div

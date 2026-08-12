@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { Organization } from '@/types/api';
 
 const replace = vi.fn();
@@ -12,10 +13,24 @@ vi.mock('next/navigation', () => ({
 
 let orgsData: Organization[] | undefined;
 let membershipData: { id: string; role: string; status: string } | undefined;
+let orgsError = false;
+let membershipError = false;
+const refetchOrgs = vi.fn();
+const refetchMembership = vi.fn();
 
 vi.mock('@/features/orgs/use-orgs', () => ({
-  useOrgs: () => ({ data: orgsData, isPending: orgsData === undefined }),
-  useMyMembership: () => ({ data: membershipData, isPending: membershipData === undefined }),
+  useOrgs: () => ({
+    data: orgsData,
+    isPending: orgsData === undefined && !orgsError,
+    isError: orgsError,
+    refetch: refetchOrgs,
+  }),
+  useMyMembership: () => ({
+    data: membershipData,
+    isPending: membershipData === undefined && !membershipError,
+    isError: membershipError,
+    refetch: refetchMembership,
+  }),
 }));
 
 import { OrgProvider } from '@/features/orgs/org-provider';
@@ -34,9 +49,13 @@ const orgA: Organization = {
 describe('OrgProvider', () => {
   beforeEach(() => {
     replace.mockClear();
+    refetchOrgs.mockClear();
+    refetchMembership.mockClear();
     params = { orgSlug: 'alpha' };
     orgsData = [orgA];
     membershipData = { id: 'm1', role: 'PRESIDENT', status: 'ACTIVE' };
+    orgsError = false;
+    membershipError = false;
   });
 
   it('resolves the slug and renders children', () => {
@@ -68,6 +87,44 @@ describe('OrgProvider', () => {
       </OrgProvider>,
     );
     expect(replace).toHaveBeenCalledWith('/welcome');
+  });
+
+  it('shows a retry affordance when the org list fails to load', async () => {
+    orgsData = undefined;
+    orgsError = true;
+    render(
+      <OrgProvider>
+        <div>inside</div>
+      </OrgProvider>,
+    );
+    expect(screen.queryByText('inside')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Loading')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /try again/i }));
+    expect(refetchOrgs).toHaveBeenCalled();
+  });
+
+  it('shows a retry affordance when the membership lookup fails', async () => {
+    membershipData = undefined;
+    membershipError = true;
+    render(
+      <OrgProvider>
+        <div>inside</div>
+      </OrgProvider>,
+    );
+    expect(screen.queryByText('inside')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Loading')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /try again/i }));
+    expect(refetchMembership).toHaveBeenCalled();
+  });
+
+  it('still shows the spinner while genuinely loading', () => {
+    orgsData = undefined;
+    render(
+      <OrgProvider>
+        <div>inside</div>
+      </OrgProvider>,
+    );
+    expect(screen.getByLabelText('Loading')).toBeInTheDocument();
   });
 
   it('applies a passing org primaryColor as a CSS variable override', () => {

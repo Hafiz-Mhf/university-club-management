@@ -15,6 +15,15 @@ export class RefreshTokenRepository {
     return { id: row.id, userId: row.userId };
   }
 
+  // Distinguishes "this hash was issued to someone and later rotated away"
+  // from "this hash was never issued" — findActiveByHash collapses both to
+  // null, which is exactly the signal reuse detection needs.
+  async findRevokedByHash(tokenHash: string): Promise<{ id: string; userId: string } | null> {
+    const row = await this.prisma.refreshToken.findUnique({ where: { tokenHash } });
+    if (!row || !row.revokedAt) return null;
+    return { id: row.id, userId: row.userId };
+  }
+
   async revoke(id: string): Promise<void> {
     await this.prisma.refreshToken.update({ where: { id }, data: { revokedAt: new Date() } });
   }

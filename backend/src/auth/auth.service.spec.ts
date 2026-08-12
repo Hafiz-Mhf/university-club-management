@@ -5,6 +5,7 @@ import { ConfigModule } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RefreshTokenRepository } from './refresh-token.repository';
+import { AuditService } from '../audit/audit.service';
 
 describe('AuthService.register', () => {
   let service: AuthService;
@@ -13,7 +14,7 @@ describe('AuthService.register', () => {
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       imports: [JwtModule.register({ secret: 'test' }), ConfigModule.forRoot({ isGlobal: true })],
-      providers: [AuthService, PrismaService, RefreshTokenRepository],
+      providers: [AuthService, PrismaService, RefreshTokenRepository, AuditService],
     }).compile();
     service = moduleRef.get(AuthService);
     prisma = moduleRef.get(PrismaService);

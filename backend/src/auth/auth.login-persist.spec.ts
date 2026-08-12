@@ -3,6 +3,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { RefreshTokenRepository } from './refresh-token.repository';
+import { AuditService } from '../audit/audit.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { sha256 } from './token.util';
 
@@ -15,7 +16,7 @@ describe('AuthService.login persists refresh hash', () => {
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
       imports: [JwtModule.register({}), ConfigModule.forRoot({ isGlobal: true })],
-      providers: [AuthService, RefreshTokenRepository, PrismaService],
+      providers: [AuthService, RefreshTokenRepository, PrismaService, AuditService],
     }).compile();
     auth = moduleRef.get(AuthService);
     prisma = moduleRef.get(PrismaService);

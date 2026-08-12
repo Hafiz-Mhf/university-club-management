@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { useMyMembership, useOrgs } from '@/features/orgs/use-orgs';
 import { meetsBrandContrast } from '@/features/orgs/contrast';
 import type { MyMembership, Organization } from '@/types/api';
@@ -61,6 +62,24 @@ export function OrgProvider({ children }: { children: React.ReactNode }) {
     }
     return style;
   }, [org?.primaryColor, org?.secondaryColor, theme]);
+
+  // Everything below this provider depends on it, so an unhandled fetch
+  // failure here would replace the whole authenticated app with a spinner
+  // that never resolves. Surface the failure with a way out instead.
+  if (orgs.isError || membership.isError) {
+    const retry = () => {
+      if (orgs.isError) orgs.refetch();
+      if (membership.isError) membership.refetch();
+    };
+    return (
+      <div className="flex min-h-dvh flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
+        <p className="text-sm text-foreground-muted">Couldn&apos;t load your organization.</p>
+        <Button variant="secondary" onClick={retry}>
+          Try again
+        </Button>
+      </div>
+    );
+  }
 
   if (!org || !membership.data) {
     return (

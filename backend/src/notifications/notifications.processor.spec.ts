@@ -16,6 +16,7 @@ describe('NotificationsProcessor', () => {
     user: { findUnique: jest.Mock };
     event: { findUnique: jest.Mock };
     certificate: { findUnique: jest.Mock };
+    auditLog: { findMany: jest.Mock };
   };
   let mailer: { sendMail: jest.Mock };
   let audit: { record: jest.Mock };
@@ -26,6 +27,7 @@ describe('NotificationsProcessor', () => {
       user: { findUnique: jest.fn() },
       event: { findUnique: jest.fn() },
       certificate: { findUnique: jest.fn() },
+      auditLog: { findMany: jest.fn().mockResolvedValue([]) },
     };
     mailer = { sendMail: jest.fn().mockResolvedValue(undefined) };
     audit = { record: jest.fn().mockResolvedValue(undefined) };
@@ -84,6 +86,31 @@ describe('NotificationsProcessor', () => {
     await processor.process(fakeJob(NotificationJobName.EventReminder, { organizationId: 'org1', eventId: 'event1' }));
     expect(mailer.sendMail).toHaveBeenCalledTimes(2);
     expect(audit.record).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not re-email registrants already reminded on an earlier attempt', async () => {
+    // With retries enabled, a send that throws halfway through restarts the
+    // whole job — the recipients handled on the first pass must be skipped.
+    prisma.event.findUnique.mockResolvedValue({ title: 'Tech Talk', venue: 'Hall A', startAt: new Date(), status: 'PUBLISHED' });
+    prisma.registration.findMany.mockResolvedValue([
+      { id: 'reg1', user: { email: 'a@test.io', fullName: 'A' } },
+      { id: 'reg2', user: { email: 'b@test.io', fullName: 'B' } },
+    ]);
+    // reg1 was already sent and audited before the previous attempt died.
+    prisma.auditLog.findMany.mockResolvedValue([{ targetId: 'reg1' }]);
+
+    await processor.process(fakeJob(NotificationJobName.EventReminder, { organizationId: 'org1', eventId: 'event1' }));
+
+    expect(mailer.sendMail).toHaveBeenCalledTimes(1);
+    expect(mailer.sendMail).toHaveBeenCalledWith(expect.objectContaining({ to: 'b@test.io' }));
+    // The lookup must be scoped to reminder rows: 'notification.email' against
+    // a Registration is also written for approval/rejection mails, and letting
+    // those match would suppress the reminder entirely.
+    expect(prisma.auditLog.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        metadata: { path: ['kind'], equals: NotificationJobName.EventReminder },
+      }),
+    }));
   });
 
   it('skips event.reminder entirely when the event is no longer PUBLISHED', async () => {

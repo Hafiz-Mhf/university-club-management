@@ -37,6 +37,17 @@ import { envValidationSchema } from './config/env.validation';
             port: Number(redisUrl.port) || 6379,
             password: redisUrl.password || undefined,
           },
+          // BullMQ defaults to attempts: 0 — a job that throws once is gone for
+          // good, so a single SMTP or S3 hiccup would silently lose a
+          // notification or a generated certificate. Retry with exponential
+          // backoff (5s, 10s, 20s), and keep failed jobs in Redis after the
+          // last attempt so they can be inspected rather than vanishing.
+          defaultJobOptions: {
+            attempts: 4,
+            backoff: { type: 'exponential', delay: 5000 },
+            removeOnComplete: 1000,
+            removeOnFail: false,
+          },
         };
       },
     }),
